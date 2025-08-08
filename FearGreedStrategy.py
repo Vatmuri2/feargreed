@@ -10,7 +10,7 @@ class FearGreedStrategy(bt.Strategy):
     def next(self):
         size = int(self.broker.getcash() / self.close[0])
 
-        if self.fear_greed[0] < 10 and not self.position:
+        if self.fear_greed[0] < 20 and not self.position:
             self.buy(size=size)
-        if self.fear_greed[0] > 94 and self.position.size > 0:
+        if self.fear_greed[0] > 54 and self.position.size > 0:
             self.sell(size=self.position.size)
