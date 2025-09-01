@@ -213,3 +213,4 @@ if __name__ == '__main__':
         sell_full_position(SYMBOL)
     else:
         print("Hold: No trade executed.")
+
