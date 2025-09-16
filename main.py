@@ -6,8 +6,8 @@ using momentum and velocity indicators to generate buy/sell signals for a
 synthetic 2x leveraged ETF position. It includes comprehensive tax calculations
 for short-term capital gains and performance analytics.
 
-Author: [Your Name]
-Date: [Date]
+Author: Vikram Atmuri
+Date: 15 September 2025
 """
 
 import pandas as pd
