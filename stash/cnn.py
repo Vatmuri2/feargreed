@@ -22,7 +22,7 @@ def fetch_data(start_date):
 
 # Break into yearly chunks to avoid 500 error
 start_dates = [
-    "2021-01-01", "2022-01-01",
+    "2025-01-01", "2022-01-01",
     "2023-01-01", "2024-01-01"
 ]
 
@@ -34,6 +34,8 @@ for sd in start_dates:
 # Convert to DataFrame and deduplicate
 df = pd.DataFrame(all_data).drop_duplicates(subset=['Date']).sort_values('Date').reset_index(drop=True)
 
-df.to_csv("fear_greed_2020_present.csv", index=False)
+df.drop(columns='Rating', inplace=True)
+df.to_csv("fear_greed_2021_present.csv", index=False)
+
 print(df.head())
 print(f"\nSaved {len(df)} rows to fear_greed_2020_present.csv")
