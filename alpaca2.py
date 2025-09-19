@@ -14,13 +14,13 @@ import yfinance as yf
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-API_KEY = 'PKVVMQPZU4DBWK9DH51G'
-API_SECRET = 'Nm1UpSPe7xzyYeQOtVGTSwUG2xbgMRstpfmsfGGb'
+API_KEY = 'PKVFXBFXK01KNZWV6JM9'
+API_SECRET = 'QaJcd9Dsc9fBeR3JeWtwAgP7nshz9cmcypBG2UTA'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
 TRADE_SYMBOL = 'SPY'  
 LOG_FILE = 'trading_log.csv'
-FG_PATH = 'datasets/fear_greed_forward_test.csv'  # Path to historical F&G data
+FG_PATH = 'datasets/fear_greed_forward_test_afternoon.csv'  # Path to historical F&G data
 
 # Strategy Parameters
 MOMENTUM_THRESHOLD = 1.0
@@ -252,8 +252,8 @@ def main():
     print("Fear & Greed Strategy Execution - Starting Continuous Mode")
     print("=" * 60)
     
-    TARGET_HOUR = 6 # 9:00 AM PST
-    TARGET_MINUTE = 56
+    TARGET_HOUR = 12 # 9:00 AM PST
+    TARGET_MINUTE = 50
     target_time = datetime.time(TARGET_HOUR, TARGET_MINUTE)
     
     MARKET_OPEN_HOUR = 6
