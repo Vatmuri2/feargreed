@@ -25,3 +25,5 @@ in the secound step you should install the requirements with
 
 newer versions of the backtrader framework currently have issues as you can read here 
 https://community.backtrader.com/topic/981/importerror-cannot-import-name-min_per_hour-when-trying-to-plot/9
+# feargreed
+Fear and Greed trading Bot
