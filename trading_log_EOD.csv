@@ -1,0 +1,9 @@
+Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volatility,Portfolio_Value,Buying_Power,Signal_Reason
+2025-09-18 07:11:35,NO_ACTION,SSO,0,110.57,61.0,1.1799999999999713,2.1233333333333326,,25000.0,50000.0,Strong momentum/velocity but high volatility
+2025-09-18 07:13:07,NO_ACTION,SSO,0,110.57,61.0,0.0,-0.3333333333333333,,25000.0,50000.0,Insufficient momentum/velocity for entry
+2025-09-18 07:13:21,NO_ACTION,SSO,0,110.57,61.0,0.0,-0.3333333333333333,,25000.0,50000.0,Insufficient momentum/velocity for entry
+2025-09-18 07:18:23,NO_ACTION,SSO,0,110.57,61,0.0,-0.3333333333333333,0.0882,25000.0,50000.0,Insufficient momentum/velocity for entry
+2025-09-18 07:19:56,NO_ACTION,SSO,0,110.57,61.0,0.0,-0.3333333333333333,0.0882,25000.0,50000.0,Insufficient momentum/velocity for entry
+2025-09-18 07:20:29,NO_ACTION,SPY,0,663.69,61.0,0.0,-0.3333333333333333,0.0882,25000.0,50000.0,Insufficient momentum/velocity for entry
+2025-09-18 07:21:36,BOUGHT,SPY,71,663.82,61.0,2.6666666666666643,1.0,0.0882,25000.0,50000.0,"Strong momentum/velocity, low volatility"
+2025-09-18 12:50:02,BOUGHT,SPY,71,662.36,62.0,2.6666666666666643,1.0,0.0882,25000.0,50000.0,"Strong momentum/velocity, low volatility"
