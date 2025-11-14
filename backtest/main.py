@@ -34,8 +34,8 @@ fear_greed_data['Date'] = pd.to_datetime(fear_greed_data['Date'])
 fear_greed_data = fear_greed_data[['Date', 'fear_greed']]
 
 # Define backtesting period
-start_date = '2011-01-03'
-end_date = '2025-09-12'
+start_date = '2025-09-18'
+end_date = '2025-10-24'
 print("Start Date:", start_date, "End Date:", end_date)
 
 # Download SPY ETF data from Yahoo Finance
@@ -50,7 +50,7 @@ print(spy_data)
 # Forward fill missing Fear & Greed values for weekends/holidays
 merged_data = pd.merge(spy_data, fear_greed_data[['Date', 'fear_greed']], on='Date', how='left')
 merged_data['fear_greed'] = merged_data['fear_greed'].ffill()
-price_col = 'Close'
+price_col = 'Open'
 
 # =============================================================================
 # TRADING STRATEGY IMPLEMENTATION SECTION
@@ -142,8 +142,8 @@ def strategy(data, momentum_threshold=1.0, velocity_threshold=0.3,
         #     Volatility exceeds risk threshold)
         sell_signal = (
             current_position == 1 and (
-                fg_momentum < -momentum_threshold or
-                fg_velocity < -velocity_threshold or
+                fg_momentum < momentum_threshold or
+                fg_velocity < velocity_threshold or
                 days_held >= max_days_held or
                 (pd.notna(volatility) and volatility > volatility_sell_limit)
             )
@@ -189,8 +189,8 @@ This section defines the strategy parameters that control:
 
 # Strategy parameters - these can be optimized through backtesting
 strategy_params = {
-    'momentum_threshold': 1.0,      # F&G momentum threshold for entry
-    'velocity_threshold': 0.3,       # F&G velocity threshold for entry
+    'momentum_threshold': 0.2,      # F&G momentum threshold for entry
+    'velocity_threshold': 0.15,       # F&G velocity threshold for entry
     'max_days_held': 8,             # Maximum days to hold any position
     'volatility_buy_limit': 0.6,    # Max volatility to allow new positions
     'volatility_sell_limit': 0.5,   # Volatility level that triggers exit
