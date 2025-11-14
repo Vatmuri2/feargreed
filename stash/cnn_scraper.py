@@ -34,7 +34,6 @@ if response.status_code == 200:
     df_index_new = df_index_new[['Date', 'Fear Greed', 'rating']]
 
     print(df_index_new.head())
-    df_index_new['Fear Greed'] = np.floor(df_index_new['Fear Greed']).astype(int)
     # Save the DataFrame to a CSV file
     df_index_new.to_csv('datasets/present.csv', index=False)
 else:
