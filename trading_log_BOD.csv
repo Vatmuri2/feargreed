@@ -41,3 +41,4 @@ Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volat
 2025-11-12 07:52:44,BOUGHT,SPY,68,682.6,34.14,4.569999999999997,5.170000000000001,0.12,24692.22,49384.44,"Strong momentum/velocity, low volatility",0
 2025-11-12 07:53:48,NO_ACTION,SPY,0,682.545,34.14,4.569999999999997,5.170000000000001,0.12,24689.5,2964.92,Holding position - indicators still favorable (0/8 days),0
 2025-11-13 06:40:02,NO_ACTION,SPY,0,678.865,32.71,0.5399999999999991,2.6,0.1195,24437.89,2713.3,Holding position - indicators still favorable (1/8 days),1
+2025-11-14 06:40:03,SOLD,SPY,68,666.565,17.07,-10.903333333333329,-4.196666666666666,0.1327,23604.21,1879.62,Momentum reversal or high volatility,2
