@@ -14,8 +14,8 @@ import yfinance as yf
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-API_KEY = 'PKVVMQPZU4DBWK9DH51G'
-API_SECRET = 'Nm1UpSPe7xzyYeQOtVGTSwUG2xbgMRstpfmsfGGb'
+API_KEY = 'PK2FJH3CAEOSD2IPVIV3EVB3WD'
+API_SECRET = 'FRKEVUMqGcZV7U6V9Q7yxnqqBM19MCYqewMLcPkEEb1p'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
 TRADE_SYMBOL = 'SPY'  
