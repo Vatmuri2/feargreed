@@ -7,12 +7,10 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.common.exceptions import APIError
-from alpaca.data.requests import LatestQuoteRequest, LatestTradeRequest
-from alpaca.trading.requests import GetPositionsRequest
+from alpaca.data.requests import LatestTradeRequest
 from alpaca.trading.requests import GetOrdersRequest
 import numpy as np
 import pandas_market_calendars as mcal
-import logging
 import os
 import pytz
 
@@ -142,7 +140,7 @@ def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
             return None
 
         # Make sure we have only the symbol we need (sometimes get_bars returns multi-symbol df)
-        if isinstance(bars.columns, pd.MultiIndex):
+        if isinstance(bars.columns, pd.MultiIndex) and symbol in bars.columns.levels[0]:
             bars = bars[symbol]
 
         # Calculate daily returns
@@ -376,7 +374,6 @@ def main():
         time.sleep(sleep_seconds)
 
 def execute_trading_logic(current_date):
-    """Execute the actual trading logic"""
     print("Executing trading logic...")
     
     fg_data, current_fgi, fgi_column = fetch_and_update_fgi()
@@ -388,9 +385,9 @@ def execute_trading_logic(current_date):
     
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
-        # ✅ FIXED: Use .price instead of .p
-        trade = data_client.get_latest_trade(LatestTradeRequest(symbol="SPY"))
-        current_price = trade.price
+        # Use LatestTradeRequest like in your second script
+        latest_trade = data_client.get_latest_trade(LatestTradeRequest(symbol_or_symbols=TRADE_SYMBOL))
+        current_price = latest_trade.price
 
     except Exception as e:
         print(f"Error getting market data: {e}. Skipping execution today.")
