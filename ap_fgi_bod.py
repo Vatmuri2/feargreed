@@ -2,14 +2,19 @@ import pandas as pd
 import datetime
 import time
 import fear_and_greed as fg
-import alpaca_trade_api as tradeapi
-from alpaca_trade_api.rest import APIError
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.common.exceptions import APIError
+from alpaca.data.requests import LatestQuoteRequest, LatestTradeRequest
+from alpaca.trading.requests import GetPositionsRequest
+from alpaca.trading.requests import GetOrdersRequest
 import numpy as np
 import pandas_market_calendars as mcal
 import logging
 import os
 import pytz
-import yfinance as yf
 
 # =============================================================================
 # CONFIGURATION
@@ -48,7 +53,8 @@ if not os.path.exists(LOG_FILE):
 # =============================================================================
 # ALPACA API INITIALIZATION
 # =============================================================================
-api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
+trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
+data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 def fetch_and_update_fgi():
     """Fetches the latest Fear & Greed Index value and appends it to the dataset."""
@@ -113,55 +119,64 @@ def calculate_indicators(fg_data, fgi_column):
     return data
 
 def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
-    """Calculates current volatility directly from the traded symbol's historical data."""
+    """
+    Calculate the annualized volatility for the given symbol using Alpaca historical data.
+    Volatility is computed as the standard deviation of daily returns over the specified window.
+    """
     try:
-        # ✅ FIXED: Use correct timeframe format
-        spy = yf.download("SPY", start="2025-08-01", end=datetime.date.today())
-        spy['price_returns'] = spy['Close'].pct_change()
-        spy['volatility'] = spy['price_returns'].rolling(20, min_periods=1).std() * np.sqrt(252)
+        # Calculate the start date based on the window
+        end_date = datetime.date.today()
+        start_date = end_date - datetime.timedelta(days=window*2)  # extra buffer for market holidays
 
-        curr_volatility = spy['volatility'].iloc[-1]
+        # Fetch historical daily bars from Alpaca
+        bars = data_client.get_bars(
+            symbol,
+            timeframe="1Day",
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            adjustment="raw"
+        ).df
 
+        if bars.empty:
+            print(f"No historical data returned for {symbol}")
+            return None
+
+        # Make sure we have only the symbol we need (sometimes get_bars returns multi-symbol df)
+        if isinstance(bars.columns, pd.MultiIndex):
+            bars = bars[symbol]
+
+        # Calculate daily returns
+        bars['price_returns'] = bars['close'].pct_change()
+
+        # Calculate rolling volatility and annualize
+        bars['volatility'] = bars['price_returns'].rolling(window, min_periods=1).std() * np.sqrt(252)
+
+        # Take the latest volatility
+        curr_volatility = bars['volatility'].iloc[-1]
         return round(curr_volatility, 4)
+
     except Exception as e:
         print(f"Error calculating volatility for {symbol}: {e}")
         return None
 
+
+
 def get_current_position(symbol):
-    """Checks if we have a position in the given symbol. Returns (True, qty) or (False, 0)."""
     try:
-        position = api.get_position(symbol)
-        return True, int(position.qty)
-    except APIError as e:  # ✅ FIXED: Use correct exception class
-        # 404 error means no position exists
+        position = trading_client.get_open_position(symbol)
+        return True, int(float(position.qty))
+    except APIError:
         return False, 0
 
+
 def get_position_entry_date(symbol):
-    """
-    Finds the entry date by looking at the most recent 'buy' order for this symbol
-    that has been filled.
-    """
-    try:
-        # Get orders for this symbol, sorted by most recent first
-        orders = api.list_orders(
-            status='closed',
-            limit=100,
-            direction='desc'
-        )
-        
-        # Find the most recent filled buy order for this symbol
-        for order in orders:
-            if order.symbol == symbol and order.side == 'buy' and order.filled_qty:
-                # Convert the order timestamp to a date
-                order_date = pd.to_datetime(order.submitted_at).date()
-                return order_date
-                
-        print(f"No buy orders found for {symbol}")
-        return None
-        
-    except Exception as e:
-        print(f"Error getting order history for {symbol}: {e}")
-        return None
+    orders = trading_client.get_orders(
+        GetOrdersRequest(status="closed", direction="desc")
+    )
+    for order in orders:
+        if order.symbol == symbol and order.side == OrderSide.BUY and order.filled_qty:
+            return order.filled_at.date()
+    return None
     
 def generate_signal(fg_data, current_volatility):
     """Generates a BUY or SELL signal based on the latest calculated indicators."""
@@ -210,43 +225,37 @@ def generate_signal(fg_data, current_volatility):
     return signal, reason, latest_data['fg_momentum'], latest_data['fg_velocity'], days_held # <-- Return days_held
 
 def execute_trade(signal, current_price):
-    """Executes trade based on signal and logs it."""
-    account = api.get_account()
-    portfolio_value = float(account.portfolio_value)
+    account = trading_client.get_account()
     buying_power = float(account.buying_power)
-    has_position, position_qty = get_current_position(TRADE_SYMBOL)
+    portfolio_value = float(account.portfolio_value)
     
-    if signal == "BUY" and not has_position:
-        qty = int((buying_power * 0.95) / current_price)
-        
-        # ✅ FIXED: Prevent qty=0 orders
-        if qty <= 0:
-            print("Insufficient buying power to place buy order.")
-            return "NO_ACTION", 0, portfolio_value, buying_power
+    has_pos, qty = get_current_position(TRADE_SYMBOL)
 
-        api.submit_order(
+    if signal == "BUY" and not has_pos:
+        qty_to_buy = int((buying_power * 0.95) / current_price)
+        if qty_to_buy <= 0:
+            return "NO_ACTION", 0, portfolio_value, buying_power
+        
+        order = MarketOrderRequest(
+            symbol=TRADE_SYMBOL,
+            qty=qty_to_buy,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY
+        )
+        trading_client.submit_order(order)
+        return "BOUGHT", qty_to_buy, portfolio_value, buying_power
+
+    elif signal == "SELL" and has_pos:
+        order = MarketOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=qty,
-            side='buy',
-            type='market',
-            time_in_force='day'
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.DAY
         )
-        action = "BOUGHT"
-    elif signal == "SELL" and has_position:
-        api.submit_order(
-            symbol=TRADE_SYMBOL,
-            qty=position_qty,
-            side='sell',
-            type='market',
-            time_in_force='day'
-        )
-        action = "SOLD"
-        qty = position_qty
-    else:
-        action = "NO_ACTION"
-        qty = 0
+        trading_client.submit_order(order)
+        return "SOLD", qty, portfolio_value, buying_power
         
-    return action, qty, portfolio_value, buying_power
+    return "NO_ACTION", 0, portfolio_value, buying_power
 
 def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, portfolio_value, buying_power, reason, days_held): # Add parameter
     """Logs all trade details to CSV file."""
@@ -380,7 +389,9 @@ def execute_trading_logic(current_date):
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
         # ✅ FIXED: Use .price instead of .p
-        current_price = api.get_latest_trade(TRADE_SYMBOL).price
+        trade = data_client.get_latest_trade(LatestTradeRequest(symbol="SPY"))
+        current_price = trade.price
+
     except Exception as e:
         print(f"Error getting market data: {e}. Skipping execution today.")
         return

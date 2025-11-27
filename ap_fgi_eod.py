@@ -2,14 +2,16 @@ import pandas as pd
 import datetime
 import time
 import fear_and_greed as fg
-import alpaca_trade_api as tradeapi
-from alpaca_trade_api.rest import APIError
+from alpaca.trading.client import TradingClient
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.common.exceptions import APIError
 import numpy as np
 import pandas_market_calendars as mcal
 import logging
 import os
 import pytz
-import yfinance as yf
 
 # =============================================================================
 # CONFIGURATION
@@ -34,7 +36,6 @@ MAX_DAYS_HELD = 8  # Max days to hold a position
 # =============================================================================
 # SETUP LOGGING
 # =============================================================================
-# Create a comprehensive log file if it doesn't exist
 if not os.path.exists(LOG_FILE):
     log_df = pd.DataFrame(columns=[
         'Timestamp', 'Action', 'Symbol', 'Quantity', 'Price', 'FGI_Value',
@@ -47,22 +48,20 @@ if not os.path.exists(LOG_FILE):
 # =============================================================================
 # ALPACA API INITIALIZATION
 # =============================================================================
-api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
+trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
+data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 def fetch_and_update_fgi():
-    """Fetches the latest Fear & Greed Index value and appends it to the dataset."""
+    """Same as before - unchanged"""
     try:
-        # Get current F&G value, rating and date
         fg_index = fg.get()
         curr_fgi = round(fg_index.value, 2)
         curr_rating = fg_index.description
         curr_date = datetime.date.today()
         
-        # Load existing historical data
         fg_data = pd.read_csv(FG_PATH)
         fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
         
-        # Check which column contains the F&G values
         if 'fear_greed' in fg_data.columns:
             fgi_column = 'fear_greed'
         elif 'Fear Greed' in fg_data.columns:
@@ -70,7 +69,6 @@ def fetch_and_update_fgi():
         else:
             fgi_column = 'Index'
         
-        # Check if we already have today's data
         if fg_data['Date'].iloc[-1] != curr_date:
             new_row = pd.DataFrame({
                 'Date': [curr_date], 
@@ -103,7 +101,7 @@ def fetch_and_update_fgi():
             return None, None, None
 
 def calculate_indicators(fg_data, fgi_column):
-    """Calculates trading indicators from Fear & Greed data only."""
+    """Same as before"""
     data = fg_data.copy()
     data['fg_momentum'] = data[fgi_column] - data[fgi_column].rolling(LOOKBACK_DAYS, min_periods=1).mean()
     data['fg_change'] = data[fgi_column].diff().fillna(0)
@@ -111,64 +109,78 @@ def calculate_indicators(fg_data, fgi_column):
     return data
 
 def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
-    """Calculates current volatility directly from the traded symbol's historical data."""
+    """
+    Calculate the annualized volatility for the given symbol using Alpaca historical data.
+    Volatility is computed as the standard deviation of daily returns over the specified window.
+    """
     try:
-        spy = yf.download("SPY", start="2025-08-01", end=datetime.date.today())
-        spy['price_returns'] = spy['Close'].pct_change()
-        spy['volatility'] = spy['price_returns'].rolling(20, min_periods=1).std() * np.sqrt(252)
-        curr_volatility = spy['volatility'].iloc[-1]
+        # Calculate the start date based on the window
+        end_date = datetime.date.today()
+        start_date = end_date - datetime.timedelta(days=window*2)  # extra buffer for market holidays
+
+        # Fetch historical daily bars from Alpaca
+        bars = data_client.get_bars(
+            symbol,
+            timeframe="1Day",
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            adjustment="raw"
+        ).df
+
+        if bars.empty:
+            print(f"No historical data returned for {symbol}")
+            return None
+
+        # Make sure we have only the symbol we need (sometimes get_bars returns multi-symbol df)
+        if isinstance(bars.columns, pd.MultiIndex):
+            bars = bars[symbol]
+
+        # Calculate daily returns
+        bars['price_returns'] = bars['close'].pct_change()
+
+        # Calculate rolling volatility and annualize
+        bars['volatility'] = bars['price_returns'].rolling(window, min_periods=1).std() * np.sqrt(252)
+
+        # Take the latest volatility
+        curr_volatility = bars['volatility'].iloc[-1]
         return round(curr_volatility, 4)
+
     except Exception as e:
         print(f"Error calculating volatility for {symbol}: {e}")
         return None
 
+
 def get_current_position(symbol):
-    """Checks if we have a position in the given symbol. Returns (True, qty) or (False, 0)."""
+    """Alpaca-py replacement for checking current position"""
     try:
-        position = api.get_position(symbol)
-        return True, int(position.qty)
-    except APIError as e:
+        position = trading_client.get_open_position(symbol)
+        return True, int(float(position.qty))
+    except APIError:
         return False, 0
 
 def get_position_entry_date(symbol):
-    """
-    Finds the entry date by looking at the most recent 'buy' order for this symbol
-    that has been filled.
-    """
+    """Alpaca-py replacement for order history"""
     try:
-        # Get orders for this symbol, sorted by most recent first
-        orders = api.list_orders(
-            status='closed',
-            limit=100,
-            direction='desc'
-        )
-        
-        # Find the most recent filled buy order for this symbol
+        orders = trading_client.get_orders(GetOrdersRequest(status="closed", direction="desc"))
         for order in orders:
-            if order.symbol == symbol and order.side == 'buy' and order.filled_qty:
-                # Convert the order timestamp to a date
-                order_date = pd.to_datetime(order.submitted_at).date()
-                return order_date
-                
-        print(f"No buy orders found for {symbol}")
+            if order.symbol == symbol and order.side == OrderSide.BUY and order.filled_qty:
+                return order.filled_at.date()
         return None
-        
     except Exception as e:
         print(f"Error getting order history for {symbol}: {e}")
         return None
 
 def generate_signal(fg_data, current_volatility):
-    """Generates a BUY or SELL signal based on the latest calculated indicators."""
+    """Same logic as before - unchanged"""
     latest_data = fg_data.iloc[-1]
     has_position, position_qty = get_current_position(TRADE_SYMBOL)
     
-    # Check how long we've been in the position
     days_held = 0
     if has_position:
         entry_date = get_position_entry_date(TRADE_SYMBOL)
         if entry_date:
             days_held = (datetime.date.today() - entry_date).days
-        print(f"DEBUG: Position has been held for {days_held} days (Max: {MAX_DAYS_HELD})")
+        print(f"DEBUG: Position held for {days_held} days (Max: {MAX_DAYS_HELD})")
     
     signal = "HOLD"
     reason = ""
@@ -186,14 +198,12 @@ def generate_signal(fg_data, current_volatility):
         else:
             reason = "Insufficient momentum/velocity for entry"
     else:
-        # UPDATED SELL LOGIC: Added 'days_held >= MAX_DAYS_HELD' condition
         if (latest_data['fg_momentum'] < MOMENTUM_THRESHOLD or 
             latest_data['fg_velocity'] < VELOCITY_THRESHOLD or
             current_volatility > VOLATILITY_SELL_LIMIT or
             days_held >= MAX_DAYS_HELD):
             
             signal = "SELL"
-            # Specify the reason for selling
             if days_held >= MAX_DAYS_HELD:
                 reason = f"Maximum holding period reached ({days_held} days >= {MAX_DAYS_HELD})"
             else:
@@ -204,42 +214,35 @@ def generate_signal(fg_data, current_volatility):
     return signal, reason, latest_data['fg_momentum'], latest_data['fg_velocity'], days_held
 
 def execute_trade(signal, current_price):
-    """Executes trade based on signal and logs it."""
-    account = api.get_account()
+    """Alpaca-py replacement for trade execution"""
+    account = trading_client.get_account()
     portfolio_value = float(account.portfolio_value)
     buying_power = float(account.buying_power)
     has_position, position_qty = get_current_position(TRADE_SYMBOL)
     
     if signal == "BUY" and not has_position:
-        qty = int((buying_power * 0.95) / current_price)
-        
-        if qty <= 0:
-            print("Insufficient buying power to place buy order.")
+        qty_to_buy = int((buying_power * 0.95) / current_price)
+        if qty_to_buy <= 0:
             return "NO_ACTION", 0, portfolio_value, buying_power
-
-        api.submit_order(
+        order = MarketOrderRequest(
             symbol=TRADE_SYMBOL,
-            qty=qty,
-            side='buy',
-            type='market',
-            time_in_force='day'
+            qty=qty_to_buy,
+            side=OrderSide.BUY,
+            time_in_force=TimeInForce.DAY
         )
-        action = "BOUGHT"
+        trading_client.submit_order(order)
+        return "BOUGHT", qty_to_buy, portfolio_value, buying_power
     elif signal == "SELL" and has_position:
-        api.submit_order(
+        order = MarketOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=position_qty,
-            side='sell',
-            type='market',
-            time_in_force='day'
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.DAY
         )
-        action = "SOLD"
-        qty = position_qty
+        trading_client.submit_order(order)
+        return "SOLD", position_qty, portfolio_value, buying_power
     else:
-        action = "NO_ACTION"
-        qty = 0
-        
-    return action, qty, portfolio_value, buying_power
+        return "NO_ACTION", 0, portfolio_value, buying_power
 
 def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, portfolio_value, buying_power, reason, days_held):
     """Logs all trade details to CSV file."""
@@ -373,7 +376,9 @@ def execute_trading_logic(current_date):
     
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
-        current_price = api.get_latest_trade(TRADE_SYMBOL).price
+        latest_trade = data_client.get_latest_trade(TRADE_SYMBOL)
+        current_price = latest_trade.price
+
     except Exception as e:
         print(f"Error getting market data: {e}. Skipping execution today.")
         return
