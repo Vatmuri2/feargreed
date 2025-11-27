@@ -7,7 +7,6 @@ from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.common.exceptions import APIError
-from alpaca.data.requests import LatestTradeRequest
 from alpaca.trading.requests import GetOrdersRequest
 import numpy as np
 import pandas_market_calendars as mcal
@@ -377,7 +376,7 @@ def execute_trading_logic(current_date):
     
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
-        latest_trade = data_client.get_latest_trade(LatestTradeRequest(symbol_or_symbols=TRADE_SYMBOL))
+        latest_trade = data_client.get_latest_trade(TRADE_SYMBOL)
         current_price = latest_trade.price
 
     except Exception as e:
