@@ -6,8 +6,11 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.common.exceptions import APIError
 from alpaca.trading.requests import GetOrdersRequest
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.requests import StockLatestTradeRequest
+from alpaca.data.timeframe import TimeFrame
+from alpaca.common.exceptions import APIError
 import numpy as np
 import pandas_market_calendars as mcal
 import os
@@ -126,21 +129,24 @@ def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
         start_date = end_date - datetime.timedelta(days=window*2)  # extra buffer for market holidays
 
         # Fetch historical daily bars from Alpaca
-        bars = data_client.get_bars(
-            symbol,
-            timeframe="1Day",
-            start=start_date.isoformat(),
-            end=end_date.isoformat(),
-            adjustment="raw"
-        ).df
+        bars_request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=TimeFrame.Day,
+            start=start_date,
+            end=end_date
+        )
+
+        bars = data_client.get_stock_bars(bars_request).df
 
         if bars.empty:
             print(f"No historical data returned for {symbol}")
             return None
 
         # Make sure we have only the symbol we need (sometimes get_bars returns multi-symbol df)
-        if isinstance(bars.columns, pd.MultiIndex) and symbol in bars.columns.levels[0]:
-            bars = bars[symbol]
+        # Extract only this symbol's rows if MultiIndex
+        if isinstance(bars.index, pd.MultiIndex):
+            bars = bars.xs(symbol, level="symbol")
+
             
         # Calculate daily returns
         bars['price_returns'] = bars['close'].pct_change()
@@ -386,7 +392,9 @@ def execute_trading_logic(current_date):
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
         # ✅ FIXED: Use .price instead of .p
-        trade = data_client.get_latest_trade(TRADE_SYMBOL)
+        
+        latest_trade_req = StockLatestTradeRequest(symbol=TRADE_SYMBOL)
+        trade = data_client.get_stock_latest_trade(latest_trade_req)
         current_price = trade.price
 
     except Exception as e:
