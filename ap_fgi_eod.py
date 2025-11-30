@@ -8,6 +8,9 @@ from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.common.exceptions import APIError
 from alpaca.trading.requests import GetOrdersRequest
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
+from alpaca.data.requests import StockLatestTradeRequest
 import numpy as np
 import pandas_market_calendars as mcal
 import os
@@ -119,13 +122,14 @@ def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
         start_date = end_date - datetime.timedelta(days=window*2)  # extra buffer for market holidays
 
         # Fetch historical daily bars from Alpaca
-        bars = data_client.get_bars(
-            symbol,
-            timeframe="1Day",
-            start=start_date.isoformat(),
-            end=end_date.isoformat(),
-            adjustment="raw"
-        ).df
+        bars_request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=TimeFrame.Day,
+            start=start_date,
+            end=end_date
+        )
+
+        bars = data_client.get_stock_bars(bars_request).df
 
         if bars.empty:
             print(f"No historical data returned for {symbol}")
@@ -376,8 +380,9 @@ def execute_trading_logic(current_date):
     
     try:
         current_volatility = get_current_volatility(TRADE_SYMBOL)
-        latest_trade = data_client.get_latest_trade(TRADE_SYMBOL)
-        current_price = latest_trade.price
+        latest_trade_req = StockLatestTradeRequest(symbol=TRADE_SYMBOL)
+        trade = data_client.get_stock_latest_trade(latest_trade_req)
+        current_price = trade.price
 
     except Exception as e:
         print(f"Error getting market data: {e}. Skipping execution today.")
