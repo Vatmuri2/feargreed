@@ -1,20 +1,19 @@
 import pandas as pd
+import numpy as np
 import datetime
 import time
-import fear_and_greed as fg
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import GetOrdersRequest
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.requests import StockLatestTradeRequest
-from alpaca.data.timeframe import TimeFrame
-from alpaca.common.exceptions import APIError
-import numpy as np
-import pandas_market_calendars as mcal
 import os
 import pytz
+import fear_and_greed as fg
+import pandas_market_calendars as mcal
+import requests
+
+# Alpaca Trading imports (still used for orders)
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.common.exceptions import APIError
+
 
 # =============================================================================
 # CONFIGURATION
@@ -27,6 +26,8 @@ TRADE_SYMBOL = 'SPY'
 LOG_FILE = 'trading_log_BOD.csv'
 FG_PATH = 'datasets/fear_greed_forward_test_morning.csv'  # Path to historical F&G data
 
+
+POLYGON_API_KEY = 'tAj9_5sMUEaQt0Y_m5fYkfF24dzMsSUp'  
 
 # Strategy Parameters
 MOMENTUM_THRESHOLD = 0.2
@@ -54,7 +55,6 @@ if not os.path.exists(LOG_FILE):
 # ALPACA API INITIALIZATION
 # =============================================================================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 def fetch_and_update_fgi():
     """Fetches the latest Fear & Greed Index value and appends it to the dataset."""
@@ -120,47 +120,29 @@ def calculate_indicators(fg_data, fgi_column):
 
 def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
     """
-    Calculate the annualized volatility for the given symbol using Alpaca historical data.
-    Volatility is computed as the standard deviation of daily returns over the specified window.
+    Calculate annualized volatility using Polygon.io free API.
     """
     try:
-        # Calculate the start date based on the window
-        end_date = datetime.date.today()
-        start_date = end_date - datetime.timedelta(days=window*2)  # extra buffer for market holidays
+        end = datetime.date.today()
+        start = end - datetime.timedelta(days=window*3)  # buffer for holidays
 
-        # Fetch historical daily bars from Alpaca
-        bars_request = StockBarsRequest(
-            symbol_or_symbols=symbol,
-            timeframe=TimeFrame.Day,
-            start=start_date,
-            end=end_date
-        )
+        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start}/{end}?adjusted=true&apiKey={POLYGON_API_KEY}"
+        r = requests.get(url).json()
 
-        bars = data_client.get_stock_bars(bars_request).df
-
-        if bars.empty:
-            print(f"No historical data returned for {symbol}")
+        if "results" not in r or not r["results"]:
+            print(f"No data returned from Polygon for {symbol}")
             return None
 
-        # Make sure we have only the symbol we need (sometimes get_bars returns multi-symbol df)
-        # Extract only this symbol's rows if MultiIndex
-        if isinstance(bars.index, pd.MultiIndex):
-            bars = bars.xs(symbol, level="symbol")
+        df = pd.DataFrame(r["results"])
+        df["close"] = df["c"]
+        df["returns"] = df["close"].pct_change()
+        df["volatility"] = df["returns"].rolling(window, min_periods=1).std() * np.sqrt(252)
 
-            
-        # Calculate daily returns
-        bars['price_returns'] = bars['close'].pct_change()
-
-        # Calculate rolling volatility and annualize
-        bars['volatility'] = bars['price_returns'].rolling(window, min_periods=1).std() * np.sqrt(252)
-
-        # Take the latest volatility
-        curr_volatility = bars['volatility'].iloc[-1]
-        return round(curr_volatility, 4)
-
+        return round(df["volatility"].iloc[-1], 4)
     except Exception as e:
-        print(f"Error calculating volatility for {symbol}: {e}")
+        print(f"Error calculating volatility for {symbol} via Polygon: {e}")
         return None
+
 
 
 
@@ -389,17 +371,17 @@ def execute_trading_logic(current_date):
     
     fg_data = calculate_indicators(fg_data, fgi_column)
     
-    try:
-        current_volatility = get_current_volatility(TRADE_SYMBOL)
-        # ✅ FIXED: Use .price instead of .p
-        
-        latest_trade_req = StockLatestTradeRequest(symbol=TRADE_SYMBOL)
-        trade = data_client.get_stock_latest_trade(latest_trade_req)
-        current_price = trade.price
+    current_volatility = get_current_volatility(TRADE_SYMBOL)
 
+    # Fetch latest price
+    try:
+        url = f"https://api.polygon.io/v2/last/trade/{TRADE_SYMBOL}?apiKey={POLYGON_API_KEY}"
+        trade = requests.get(url).json()
+        current_price = trade["results"]["p"]
     except Exception as e:
-        print(f"Error getting market data: {e}. Skipping execution today.")
+        print(f"Error fetching latest price for {TRADE_SYMBOL} via Polygon: {e}")
         return
+
     
     signal, reason, momentum, velocity, days_held = generate_signal(fg_data, current_volatility)
     action, qty, portfolio_value, buying_power = execute_trade(signal, current_price)
