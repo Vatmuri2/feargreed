@@ -46,7 +46,7 @@ if not os.path.exists(LOG_FILE):
     log_df = pd.DataFrame(columns=[
         'Timestamp', 'Action', 'Symbol', 'Quantity', 'Price', 'FGI_Value',
         'FGI_Momentum', 'FGI_Velocity', 'Volatility', 'Portfolio_Value',
-        'Buying_Power', 'Signal_Reason'
+        'Buying_Power', 'Signal_Reason', 'Days_Held'
     ])
     log_df.to_csv(LOG_FILE, index=False)
     print(f"Created new log file: {LOG_FILE}")
@@ -56,59 +56,66 @@ if not os.path.exists(LOG_FILE):
 # =============================================================================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
 
-def fetch_and_update_fgi():
-    """Fetches the latest Fear & Greed Index value and appends it to the dataset."""
-    try:
-        # Get current F&G value, rating and date
-        fg_index = fg.get()
-        curr_fgi = round(fg_index.value, 2)  # ✅ Already floored as requested
-        curr_rating = fg_index.description
-        curr_date = datetime.date.today()
-        
-        # Load existing historical data
-        fg_data = pd.read_csv(FG_PATH)
-        fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
-        
-        # Check which column contains the F&G values
-        if 'fear_greed' in fg_data.columns:
-            fgi_column = 'fear_greed'
-        elif 'Fear Greed' in fg_data.columns:
-            fgi_column = 'Fear Greed'
-        else:
-            fgi_column = 'Index'
-        
-        # Check if we already have today's data
-        if fg_data['Date'].iloc[-1] != curr_date:
-            new_row = pd.DataFrame({
-                'Date': [curr_date], 
-                fgi_column: [curr_fgi],
-                'rating': [curr_rating]
-            })
-            fg_data = pd.concat([fg_data, new_row], ignore_index=True)
-            fg_data.to_csv(FG_PATH, index=False)
-            print(f"Updated F&G Index: {curr_date} - {curr_fgi} ({curr_rating})")
-        
-        return fg_data, curr_fgi, fgi_column
-        
-    except Exception as e:
-        print(f"Error updating F&G Index: {e}")
+def fetch_and_update_fgi(max_retries=3, retry_delay=30):
+    """Fetches the latest Fear & Greed Index value with retry logic.
+    Validates that the value has been updated today before accepting it."""
+
+    fg_data = pd.read_csv(FG_PATH)
+    fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
+
+    if 'fear_greed' in fg_data.columns:
+        fgi_column = 'fear_greed'
+    elif 'Fear Greed' in fg_data.columns:
+        fgi_column = 'Fear Greed'
+    else:
+        fgi_column = 'Index'
+
+    curr_date = datetime.date.today()
+
+    for attempt in range(1, max_retries + 1):
         try:
-            fg_data = pd.read_csv(FG_PATH)
-            fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
-            
-            if 'fear_greed' in fg_data.columns:
-                fgi_column = 'fear_greed'
-            elif 'Fear Greed' in fg_data.columns:
-                fgi_column = 'Fear Greed'
+            fg_index = fg.get()
+            curr_fgi = round(fg_index.value, 2)
+            curr_rating = fg_index.description
+            last_update = fg_index.last_update
+
+            # Validate the FGI was updated today
+            if last_update.date() < curr_date:
+                print(f"Attempt {attempt}/{max_retries}: FGI last updated {last_update.date()}, not today ({curr_date}). Retrying in {retry_delay}s...")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print(f"WARNING: FGI still stale after {max_retries} attempts. Using value {curr_fgi} (last updated {last_update.date()}).")
             else:
-                fgi_column = 'Index'
-            print(fgi_column)
-                
-            last_fgi = fg_data[fgi_column].iloc[-1]
-            return fg_data, last_fgi, fgi_column
-        except:
-            print("Fatal error: Could not load F&G data file.")
-            return None, None, None
+                print(f"FGI validated: updated {last_update} - value {curr_fgi} ({curr_rating})")
+
+            # Append to dataset if we don't have today's entry yet
+            if fg_data['Date'].iloc[-1] != curr_date:
+                new_row = pd.DataFrame({
+                    'Date': [curr_date],
+                    fgi_column: [curr_fgi],
+                    'rating': [curr_rating]
+                })
+                fg_data = pd.concat([fg_data, new_row], ignore_index=True)
+                fg_data.to_csv(FG_PATH, index=False)
+                print(f"Updated F&G dataset: {curr_date} - {curr_fgi} ({curr_rating})")
+
+            return fg_data, curr_fgi, fgi_column
+
+        except Exception as e:
+            print(f"Attempt {attempt}/{max_retries}: Error fetching F&G Index: {e}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+
+    # All retries exhausted — fall back to last known value
+    print("All FGI fetch attempts failed. Falling back to last known value.")
+    try:
+        last_fgi = fg_data[fgi_column].iloc[-1]
+        return fg_data, last_fgi, fgi_column
+    except:
+        print("Fatal error: Could not load F&G data file.")
+        return None, None, None
 
 def calculate_indicators(fg_data, fgi_column):
     """Calculates trading indicators from Fear & Greed data only."""
@@ -155,13 +162,17 @@ def get_current_position(symbol):
 
 
 def get_position_entry_date(symbol):
-    orders = trading_client.get_orders(
-        GetOrdersRequest(status="closed", direction="desc")
-    )
-    for order in orders:
-        if order.symbol == symbol and order.side == OrderSide.BUY and order.filled_qty:
-            return order.filled_at.date()
-    return None
+    try:
+        orders = trading_client.get_orders(
+            GetOrdersRequest(status="closed", direction="desc")
+        )
+        for order in orders:
+            if order.symbol == symbol and order.side == OrderSide.BUY and order.filled_qty:
+                return order.filled_at.date()
+        return None
+    except Exception as e:
+        print(f"Error getting order history for {symbol}: {e}")
+        return None
     
 def generate_signal(fg_data, current_volatility):
     """Generates a BUY or SELL signal based on the latest calculated indicators."""
@@ -288,20 +299,21 @@ def get_next_market_open():
     nyse = mcal.get_calendar('NYSE')
     eastern = pytz.timezone('US/Eastern')
     now_et = datetime.datetime.now(pytz.UTC).astimezone(eastern)
-    
-    # Get schedule for today and tomorrow
+
+    # Look ahead 7 days to handle weekends and holidays
     today = now_et.date()
-    tomorrow = today + datetime.timedelta(days=1)
-    schedule = nyse.schedule(start_date=today, end_date=tomorrow)
-    
-    # Iterate through schedule to find next open that is in the future
+    end_date = today + datetime.timedelta(days=7)
+    schedule = nyse.schedule(start_date=today, end_date=end_date)
+
     for _, row in schedule.iterrows():
         market_open = row['market_open'].to_pydatetime().astimezone(eastern)
         if market_open > now_et:
             return market_open
-    
-    # Fallback: if no market open found, return tomorrow 9:30 ET
-    return eastern.localize(datetime.datetime.combine(tomorrow, datetime.time(9,30)))
+
+    # Fallback: next Monday 9:30 ET
+    days_until_monday = (7 - today.weekday()) % 7 or 7
+    next_monday = today + datetime.timedelta(days=days_until_monday)
+    return eastern.localize(datetime.datetime.combine(next_monday, datetime.time(9,30)))
 def main():
     """Main trading function - runs continuously"""
     print("=" * 60)
@@ -322,8 +334,6 @@ def main():
         current_time = current_datetime.time()
         
         print(f"\nWoke up at {current_time.strftime('%H:%M:%S')} PST on {current_date}...")
-        
-        market_open_today = is_market_open()
         
         if not is_market_open():
             next_market_open_et = get_next_market_open()
