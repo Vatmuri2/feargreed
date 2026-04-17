@@ -57,54 +57,66 @@ if not os.path.exists(LOG_FILE):
 # =============================================================================
 trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
 
-def fetch_and_update_fgi():
-    """Same as before - unchanged"""
-    try:
-        fg_index = fg.get()
-        curr_fgi = round(fg_index.value, 2)
-        curr_rating = fg_index.description
-        curr_date = datetime.date.today()
-        
-        fg_data = pd.read_csv(FG_PATH)
-        fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
-        
-        if 'fear_greed' in fg_data.columns:
-            fgi_column = 'fear_greed'
-        elif 'Fear Greed' in fg_data.columns:
-            fgi_column = 'Fear Greed'
-        else:
-            fgi_column = 'Index'
-        
-        if fg_data['Date'].iloc[-1] != curr_date:
-            new_row = pd.DataFrame({
-                'Date': [curr_date], 
-                fgi_column: [curr_fgi],
-                'rating': [curr_rating]
-            })
-            fg_data = pd.concat([fg_data, new_row], ignore_index=True)
-            fg_data.to_csv(FG_PATH, index=False)
-            print(f"Updated F&G Index: {curr_date} - {curr_fgi} ({curr_rating})")
-        
-        return fg_data, curr_fgi, fgi_column
-        
-    except Exception as e:
-        print(f"Error updating F&G Index: {e}")
+def fetch_and_update_fgi(max_retries=3, retry_delay=30):
+    """Fetches the latest Fear & Greed Index value with retry logic.
+    Validates that the value has been updated today before accepting it."""
+
+    fg_data = pd.read_csv(FG_PATH)
+    fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
+
+    if 'fear_greed' in fg_data.columns:
+        fgi_column = 'fear_greed'
+    elif 'Fear Greed' in fg_data.columns:
+        fgi_column = 'Fear Greed'
+    else:
+        fgi_column = 'Index'
+
+    curr_date = datetime.date.today()
+
+    for attempt in range(1, max_retries + 1):
         try:
-            fg_data = pd.read_csv(FG_PATH)
-            fg_data['Date'] = pd.to_datetime(fg_data['Date']).dt.date
-            
-            if 'fear_greed' in fg_data.columns:
-                fgi_column = 'fear_greed'
-            elif 'Fear Greed' in fg_data.columns:
-                fgi_column = 'Fear Greed'
+            fg_index = fg.get()
+            curr_fgi = round(fg_index.value, 2)
+            curr_rating = fg_index.description
+            last_update = fg_index.last_update
+
+            # Validate the FGI was updated today
+            if last_update.date() < curr_date:
+                print(f"Attempt {attempt}/{max_retries}: FGI last updated {last_update.date()}, not today ({curr_date}). Retrying in {retry_delay}s...")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print(f"WARNING: FGI still stale after {max_retries} attempts. Using value {curr_fgi} (last updated {last_update.date()}).")
             else:
-                fgi_column = 'Index'
-                
-            last_fgi = fg_data[fgi_column].iloc[-1]
-            return fg_data, last_fgi, fgi_column
-        except:
-            print("Fatal error: Could not load F&G data file.")
-            return None, None, None
+                print(f"FGI validated: updated {last_update} - value {curr_fgi} ({curr_rating})")
+
+            # Append to dataset if we don't have today's entry yet
+            if fg_data['Date'].iloc[-1] != curr_date:
+                new_row = pd.DataFrame({
+                    'Date': [curr_date],
+                    fgi_column: [curr_fgi],
+                    'rating': [curr_rating]
+                })
+                fg_data = pd.concat([fg_data, new_row], ignore_index=True)
+                fg_data.to_csv(FG_PATH, index=False)
+                print(f"Updated F&G dataset: {curr_date} - {curr_fgi} ({curr_rating})")
+
+            return fg_data, curr_fgi, fgi_column
+
+        except Exception as e:
+            print(f"Attempt {attempt}/{max_retries}: Error fetching F&G Index: {e}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+
+    # All retries exhausted — fall back to last known value
+    print("All FGI fetch attempts failed. Falling back to last known value.")
+    try:
+        last_fgi = fg_data[fgi_column].iloc[-1]
+        return fg_data, last_fgi, fgi_column
+    except:
+        print("Fatal error: Could not load F&G data file.")
+        return None, None, None
 
 def calculate_indicators(fg_data, fgi_column):
     """Same as before"""
@@ -217,7 +229,8 @@ def execute_trade(signal, current_price):
             symbol=TRADE_SYMBOL,
             qty=qty_to_buy,
             side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY
+            time_in_force=TimeInForce.DAY,
+            extended_hours=True
         )
         trading_client.submit_order(order)
         return "BOUGHT", qty_to_buy, portfolio_value, buying_power
@@ -226,7 +239,8 @@ def execute_trade(signal, current_price):
             symbol=TRADE_SYMBOL,
             qty=position_qty,
             side=OrderSide.SELL,
-            time_in_force=TimeInForce.DAY
+            time_in_force=TimeInForce.DAY,
+            extended_hours=True
         )
         trading_client.submit_order(order)
         return "SOLD", position_qty, portfolio_value, buying_power
@@ -256,43 +270,34 @@ def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, por
     new_log.to_csv(LOG_FILE, mode='a', header=False, index=False)
     print(f"Logged trade: {timestamp} - {action} {qty} {TRADE_SYMBOL} @ ${price} (Held for {days_held} days)")
 
-def is_market_open():
-    """Check if market is currently open and it's a trading day."""
+def is_trading_day():
+    """Check if today is a trading day (regardless of current time).
+    Since EOD executes after market close, we only need to know if
+    the market was open today, not if it's currently open."""
     nyse = mcal.get_calendar('NYSE')
     today = datetime.date.today()
     schedule = nyse.schedule(start_date=today, end_date=today)
-    
-    if schedule.empty:
-        return False
-    
-    # ✅ FIXED: Handle timezone-aware datetime comparison
-    eastern = pytz.timezone('US/Eastern')
-    now_utc = datetime.datetime.now(pytz.UTC)
-    now_et = now_utc.astimezone(eastern)
-    
-    market_open_et = schedule.iloc[0]['market_open'].to_pydatetime().astimezone(eastern)
-    market_close_et = schedule.iloc[0]['market_close'].to_pydatetime().astimezone(eastern)
-    
-    return market_open_et <= now_et <= market_close_et
+    return not schedule.empty
 
 def get_next_market_open():
     nyse = mcal.get_calendar('NYSE')
     eastern = pytz.timezone('US/Eastern')
     now_et = datetime.datetime.now(pytz.UTC).astimezone(eastern)
-    
-    # Get schedule for today and tomorrow
+
+    # Look ahead 7 days to handle weekends and holidays
     today = now_et.date()
-    tomorrow = today + datetime.timedelta(days=1)
-    schedule = nyse.schedule(start_date=today, end_date=tomorrow)
-    
-    # Iterate through schedule to find next open that is in the future
+    end_date = today + datetime.timedelta(days=7)
+    schedule = nyse.schedule(start_date=today, end_date=end_date)
+
     for _, row in schedule.iterrows():
         market_open = row['market_open'].to_pydatetime().astimezone(eastern)
         if market_open > now_et:
             return market_open
-    
-    # Fallback: if no market open found, return tomorrow 9:30 ET
-    return eastern.localize(datetime.datetime.combine(tomorrow, datetime.time(9,30)))
+
+    # Fallback: next Monday 9:30 ET
+    days_until_monday = (7 - today.weekday()) % 7 or 7
+    next_monday = today + datetime.timedelta(days=days_until_monday)
+    return eastern.localize(datetime.datetime.combine(next_monday, datetime.time(9,30)))
 
 def main():
     """Main trading function - runs continuously"""
@@ -300,8 +305,8 @@ def main():
     print("Fear & Greed Strategy Execution - Starting Continuous Mode")
     print("=" * 60)
     
-    TARGET_HOUR = 12
-    TARGET_MINUTE = 50
+    TARGET_HOUR = 13
+    TARGET_MINUTE = 10
     target_time = datetime.time(TARGET_HOUR, TARGET_MINUTE)
     
     MARKET_OPEN_HOUR = 6
@@ -316,21 +321,19 @@ def main():
         print(f"\nWoke up at {current_time.strftime('%H:%M:%S')} PST on {current_date}...")
         
         
-        if not is_market_open():
+        if not is_trading_day():
             next_market_open_et = get_next_market_open()
-            # Convert to local timezone (PST/PDT)
             local_tz = pytz.timezone('US/Pacific')
             next_market_open_local = next_market_open_et.astimezone(local_tz)
-            
+
             sleep_seconds = (next_market_open_local - datetime.datetime.now(local_tz)).total_seconds()
             sleep_seconds = max(sleep_seconds, 60)
-            
-            print(f"Market is closed today. Sleeping until market open at {next_market_open_local.strftime('%Y-%m-%d %H:%M %Z')} ({sleep_seconds/3600:.1f} hours)...")
+
+            print(f"Not a trading day. Sleeping until next market open at {next_market_open_local.strftime('%Y-%m-%d %H:%M %Z')} ({sleep_seconds/3600:.1f} hours)...")
             time.sleep(sleep_seconds)
             continue
 
-        
-        print("Market is open today.")
+        print("Trading day confirmed.")
         target_datetime_today = datetime.datetime.combine(current_date, target_time)
         
         if current_datetime < target_datetime_today:
