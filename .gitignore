@@ -127,3 +127,17 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Virtual environment (on Pi it's .venv in-repo)
+.venv/
+
+# pip install accidents (e.g. `pip install =13` creates a file named =13)
+=*
+
+# Pi-specific files that don't belong in the repo
+pyvenv.cfg
+get-docker.sh
+Dockerfile
+
+# macOS
+.DS_Store

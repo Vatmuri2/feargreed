@@ -1,17 +1,16 @@
 #!/bin/bash
+cd /home/vikramatmuri/feargreed
 
-# Ensure logs folder exists
-mkdir -p logs
+# Pull latest code
+git pull origin main
 
-# Start tmux session for bots if not exists
-tmux has-session -t feargreed 2>/dev/null || tmux new-session -d -s feargreed
+# Restart systemd services
+sudo systemctl restart feargreed-bod.service
+sudo systemctl restart feargreed-eod.service
 
-# Start BOD bot in window 0
-tmux send-keys -t feargreed:0 "cd /app && python ap_fgi_bod.py >> logs/bod.log 2>&1" C-m
+# Show status
+sudo systemctl status feargreed-bod.service --no-pager
+sudo systemctl status feargreed-eod.service --no-pager
 
-# Create new window for EOD bot
-tmux new-window -t feargreed:1 -n EOD
-tmux send-keys -t feargreed:1 "cd /app && python alpaca_runEOD.py >> logs/eod.log 2>&1" C-m
-
-# Optional: attach to session
-tmux attach -t feargreed
+# Run daily backup
+bash /home/vikramatmuri/feargreed/backup_data.sh
