@@ -10,7 +10,7 @@ import yfinance as yf
 
 # Alpaca Trading imports (still used for orders)
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
+from alpaca.trading.requests import LimitOrderRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.common.exceptions import APIError
 
@@ -227,26 +227,39 @@ def execute_trade(signal, current_price):
         qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
             return "NO_ACTION", 0, portfolio_value, buying_power
-        
-        order = MarketOrderRequest(
+        limit_price = round(current_price * 1.002, 2)  # 0.2% above to ensure pre-market fill
+        order = LimitOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=qty_to_buy,
             side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY
+            time_in_force=TimeInForce.DAY,
+            limit_price=limit_price,
+            extended_hours=True,
         )
-        trading_client.submit_order(order)
+        try:
+            trading_client.submit_order(order)
+        except Exception as e:
+            print(f"Order submission failed: {e}")
+            return "NO_ACTION", 0, portfolio_value, buying_power
         return "BOUGHT", qty_to_buy, portfolio_value, buying_power
 
     elif signal == "SELL" and has_pos:
-        order = MarketOrderRequest(
+        limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure pre-market fill
+        order = LimitOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=qty,
             side=OrderSide.SELL,
-            time_in_force=TimeInForce.DAY
+            time_in_force=TimeInForce.DAY,
+            limit_price=limit_price,
+            extended_hours=True,
         )
-        trading_client.submit_order(order)
+        try:
+            trading_client.submit_order(order)
+        except Exception as e:
+            print(f"Order submission failed: {e}")
+            return "NO_ACTION", 0, portfolio_value, buying_power
         return "SOLD", qty, portfolio_value, buying_power
-        
+
     return "NO_ACTION", 0, portfolio_value, buying_power
 
 def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, portfolio_value, buying_power, reason, days_held): # Add parameter
@@ -331,20 +344,19 @@ def main():
         
         print(f"\nWoke up at {current_time.strftime('%H:%M:%S')} PST on {current_date}...")
         
-        if not is_market_open():
+        if not is_trading_day():
             next_market_open_et = get_next_market_open()
-            # Convert to local timezone (PST/PDT)
             local_tz = pytz.timezone('US/Pacific')
             next_market_open_local = next_market_open_et.astimezone(local_tz)
-            
+
             sleep_seconds = (next_market_open_local - datetime.datetime.now(local_tz)).total_seconds()
             sleep_seconds = max(sleep_seconds, 60)
-            
-            print(f"Market is closed today. Sleeping until market open at {next_market_open_local.strftime('%Y-%m-%d %H:%M %Z')} ({sleep_seconds/3600:.1f} hours)...")
+
+            print(f"Not a trading day. Sleeping until {next_market_open_local.strftime('%Y-%m-%d %H:%M %Z')} ({sleep_seconds/3600:.1f} hours)...")
             time.sleep(sleep_seconds)
             continue
-        
-        print("Market is open today.")
+
+        print("Trading day confirmed.")
         target_datetime_today = datetime.datetime.combine(current_date, target_time)
         
         if current_datetime < target_datetime_today:
