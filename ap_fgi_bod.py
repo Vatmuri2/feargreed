@@ -320,8 +320,8 @@ def main():
     print("Fear & Greed Strategy Execution - Starting Continuous Mode")
     print("=" * 60)
     
-    TARGET_HOUR = 6 # 9:00 AM PST
-    TARGET_MINUTE = 40
+    TARGET_HOUR = 6
+    TARGET_MINUTE = 20
     target_time = datetime.time(TARGET_HOUR, TARGET_MINUTE)
     
     MARKET_OPEN_HOUR = 6
