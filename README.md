@@ -1,6 +1,8 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-04-17 17:27 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-04-17 17:55 PST**
+
+![Portfolio Performance](assets/portfolio_chart.png)
 
 ---
 
@@ -102,5 +104,5 @@ Momentum-based strategy using CNN Fear & Greed Index to trade SPY.
 | Volatility Sell Limit | 0.5 |
 | Max Days Held | 8 |
 | Lookback Days | 3 |
-| BOD Execution | 6:40 AM PST |
+| BOD Execution | 6:20 AM PST |
 | EOD Execution | 1:10 PM PST |
