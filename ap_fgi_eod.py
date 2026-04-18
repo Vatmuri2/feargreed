@@ -218,7 +218,7 @@ def execute_trade(signal, current_price):
     has_position, position_qty = get_current_position(TRADE_SYMBOL)
     
     if signal == "BUY" and not has_position:
-        qty_to_buy = int((buying_power * 0.95) / current_price)
+        qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
             return "NO_ACTION", 0, portfolio_value, buying_power
         order = MarketOrderRequest(
