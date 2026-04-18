@@ -6,7 +6,7 @@ import os
 import pytz
 import fear_and_greed as fg
 import pandas_market_calendars as mcal
-import requests
+import yfinance as yf
 
 # Alpaca Trading imports (still used for orders)
 from alpaca.trading.client import TradingClient
@@ -18,16 +18,14 @@ from alpaca.common.exceptions import APIError
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-API_KEY = 'PK2FJH3CAEOSD2IPVIV3EVB3WD'
-API_SECRET = 'FRKEVUMqGcZV7U6V9Q7yxnqqBM19MCYqewMLcPkEEb1p'
+API_KEY = 'PKRA6EFEHE5TIDXPTF23IZ7IVK'
+API_SECRET = 'DeCXNthoXJphrUtqdRW6dquRb7ZAiUUxKeeig5t59UKw'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
 TRADE_SYMBOL = 'SPY'  
 LOG_FILE = 'trading_log_BOD.csv'
 FG_PATH = 'datasets/fear_greed_forward_test_morning.csv'  # Path to historical F&G data
 
-
-POLYGON_API_KEY = 'tAj9_5sMUEaQt0Y_m5fYkfF24dzMsSUp'  
 
 # Strategy Parameters
 MOMENTUM_THRESHOLD = 0.2
@@ -127,27 +125,25 @@ def calculate_indicators(fg_data, fgi_column):
 
 def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
     """
-    Calculate annualized volatility using Polygon.io free API.
+    Calculate annualized volatility using yfinance.
     """
     try:
         end = datetime.date.today()
         start = end - datetime.timedelta(days=window*3)  # buffer for holidays
 
-        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start}/{end}?adjusted=true&apiKey={POLYGON_API_KEY}"
-        r = requests.get(url).json()
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(start=start, end=end)
 
-        if "results" not in r or not r["results"]:
-            print(f"No data returned from Polygon for {symbol}")
+        if df.empty:
+            print(f"No data returned from yfinance for {symbol}")
             return None
 
-        df = pd.DataFrame(r["results"])
-        df["close"] = df["c"]
-        df["returns"] = df["close"].pct_change()
+        df["returns"] = df["Close"].pct_change()
         df["volatility"] = df["returns"].rolling(window, min_periods=1).std() * np.sqrt(252)
 
         return round(df["volatility"].iloc[-1], 4)
     except Exception as e:
-        print(f"Error calculating volatility for {symbol} via Polygon: {e}")
+        print(f"Error calculating volatility for {symbol} via yfinance: {e}")
         return None
 
 
@@ -385,11 +381,10 @@ def execute_trading_logic(current_date):
 
     # Fetch latest price
     try:
-        url = f"https://api.polygon.io/v2/last/trade/{TRADE_SYMBOL}?apiKey={POLYGON_API_KEY}"
-        trade = requests.get(url).json()
-        current_price = trade["results"]["p"]
+        ticker = yf.Ticker(TRADE_SYMBOL)
+        current_price = ticker.fast_info['lastPrice']
     except Exception as e:
-        print(f"Error fetching latest price for {TRADE_SYMBOL} via Polygon: {e}")
+        print(f"Error fetching latest price for {TRADE_SYMBOL} via yfinance: {e}")
         return
 
     
