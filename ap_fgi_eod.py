@@ -10,7 +10,7 @@ import yfinance as yf
 
 # Alpaca Trading imports (still used for orders)
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, GetOrdersRequest
+from alpaca.trading.requests import LimitOrderRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.common.exceptions import APIError
 
@@ -221,11 +221,14 @@ def execute_trade(signal, current_price):
         qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
             return "NO_ACTION", 0, portfolio_value, buying_power
-        order = MarketOrderRequest(
+        limit_price = round(current_price * 1.002, 2)  # 0.2% above to ensure fill
+        order = LimitOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=qty_to_buy,
             side=OrderSide.BUY,
             time_in_force=TimeInForce.DAY,
+            limit_price=limit_price,
+            extended_hours=True,
         )
         try:
             trading_client.submit_order(order)
@@ -234,11 +237,14 @@ def execute_trade(signal, current_price):
             return "NO_ACTION", 0, portfolio_value, buying_power
         return "BOUGHT", qty_to_buy, portfolio_value, buying_power
     elif signal == "SELL" and has_position:
-        order = MarketOrderRequest(
+        limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure fill
+        order = LimitOrderRequest(
             symbol=TRADE_SYMBOL,
             qty=position_qty,
             side=OrderSide.SELL,
             time_in_force=TimeInForce.DAY,
+            limit_price=limit_price,
+            extended_hours=True,
         )
         try:
             trading_client.submit_order(order)
@@ -307,8 +313,8 @@ def main():
     print("Fear & Greed Strategy Execution - Starting Continuous Mode")
     print("=" * 60)
     
-    TARGET_HOUR = 12
-    TARGET_MINUTE = 50
+    TARGET_HOUR = 13
+    TARGET_MINUTE = 10
     target_time = datetime.time(TARGET_HOUR, TARGET_MINUTE)
     
     MARKET_OPEN_HOUR = 6
