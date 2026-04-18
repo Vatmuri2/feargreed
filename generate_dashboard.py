@@ -1,10 +1,15 @@
 import pandas as pd
 import datetime
 import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 LOG_BOD = 'trading_log_BOD.csv'
 LOG_EOD = 'trading_log_EOD.csv'
 README = 'README.md'
+CHART_PATH = 'assets/portfolio_chart.png'
 
 
 def load_log(path):
@@ -15,6 +20,84 @@ def load_log(path):
         return df
     df['Timestamp'] = pd.to_datetime(df['Timestamp'])
     return df
+
+
+def generate_chart(bod_df, eod_df):
+    os.makedirs('assets', exist_ok=True)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+    fig.patch.set_facecolor('#0d1117')
+
+    has_data = False
+
+    # --- Portfolio Value Chart ---
+    ax1.set_facecolor('#0d1117')
+    for df, label, color in [(bod_df, 'BOD', '#58a6ff'), (eod_df, 'EOD', '#3fb950')]:
+        if df.empty or 'Portfolio_Value' not in df.columns:
+            continue
+        has_data = True
+        dates = df['Timestamp']
+        values = df['Portfolio_Value']
+        ax1.plot(dates, values, color=color, linewidth=1.8, label=label)
+
+        # Mark buys and sells
+        buys = df[df['Action'] == 'BOUGHT']
+        sells = df[df['Action'] == 'SOLD']
+        if not buys.empty:
+            ax1.scatter(buys['Timestamp'], buys['Portfolio_Value'],
+                        color=color, marker='^', s=60, zorder=5, alpha=0.9)
+        if not sells.empty:
+            ax1.scatter(sells['Timestamp'], sells['Portfolio_Value'],
+                        color='#f85149', marker='v', s=60, zorder=5, alpha=0.9)
+
+    if not has_data:
+        plt.close(fig)
+        return False
+
+    ax1.set_title('Portfolio Value Over Time', color='white', fontsize=14, fontweight='bold', pad=12)
+    ax1.set_ylabel('Portfolio Value ($)', color='white', fontsize=11)
+    ax1.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d',
+               labelcolor='white', fontsize=10)
+    ax1.tick_params(colors='white')
+    ax1.spines['bottom'].set_color('#30363d')
+    ax1.spines['left'].set_color('#30363d')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.grid(True, alpha=0.15, color='white')
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    ax1.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+
+    # --- FGI Chart ---
+    ax2.set_facecolor('#0d1117')
+    for df, label, color in [(bod_df, 'BOD', '#58a6ff'), (eod_df, 'EOD', '#3fb950')]:
+        if df.empty or 'FGI_Value' not in df.columns:
+            continue
+        ax2.plot(df['Timestamp'], df['FGI_Value'], color=color, linewidth=1.2, alpha=0.8)
+
+    # FGI zones
+    ax2.axhspan(0, 25, alpha=0.08, color='#f85149')
+    ax2.axhspan(75, 100, alpha=0.08, color='#3fb950')
+    ax2.axhline(y=25, color='#f85149', linestyle='--', alpha=0.3, linewidth=0.8)
+    ax2.axhline(y=50, color='#8b949e', linestyle='--', alpha=0.3, linewidth=0.8)
+    ax2.axhline(y=75, color='#3fb950', linestyle='--', alpha=0.3, linewidth=0.8)
+
+    ax2.set_title('Fear & Greed Index', color='white', fontsize=12, fontweight='bold', pad=8)
+    ax2.set_ylabel('FGI', color='white', fontsize=11)
+    ax2.set_ylim(0, 100)
+    ax2.tick_params(colors='white')
+    ax2.spines['bottom'].set_color('#30363d')
+    ax2.spines['left'].set_color('#30363d')
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.grid(True, alpha=0.15, color='white')
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    ax2.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+
+    plt.tight_layout(pad=2.0)
+    plt.savefig(CHART_PATH, dpi=150, bbox_inches='tight', facecolor='#0d1117')
+    plt.close(fig)
+    print(f'Chart saved: {CHART_PATH}')
+    return True
 
 
 def calc_stats(df, label):
@@ -96,13 +179,18 @@ def calc_stats(df, label):
     }
 
 
-def render_md(stats_list):
+def render_md(stats_list, has_chart):
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M PST')
     lines = []
     lines.append('# Fear & Greed Index Trading Bot')
     lines.append('')
     lines.append(f'> Dashboard auto-updated daily at market close | Last update: **{now}**')
     lines.append('')
+
+    if has_chart:
+        lines.append('![Portfolio Performance](assets/portfolio_chart.png)')
+        lines.append('')
+
     lines.append('---')
     lines.append('')
 
@@ -114,7 +202,6 @@ def render_md(stats_list):
         lines.append('')
 
         position = 'IN POSITION' if s['has_open'] else 'FLAT'
-        pnl_sign = '+' if s['total_pnl'] >= 0 else ''
 
         lines.append('| Metric | Value |')
         lines.append('|--------|-------|')
@@ -166,17 +253,22 @@ def render_md(stats_list):
     lines.append('| Volatility Sell Limit | 0.5 |')
     lines.append('| Max Days Held | 8 |')
     lines.append('| Lookback Days | 3 |')
-    lines.append('| BOD Execution | 6:40 AM PST |')
+    lines.append('| BOD Execution | 6:20 AM PST |')
     lines.append('| EOD Execution | 1:10 PM PST |')
     lines.append('')
 
     return '\n'.join(lines)
 
 
-bod_stats = calc_stats(load_log(LOG_BOD), 'BOD (Morning) Strategy')
-eod_stats = calc_stats(load_log(LOG_EOD), 'EOD (Afternoon) Strategy')
+bod_df = load_log(LOG_BOD)
+eod_df = load_log(LOG_EOD)
 
-md = render_md([bod_stats, eod_stats])
+bod_stats = calc_stats(bod_df, 'BOD (Morning) Strategy')
+eod_stats = calc_stats(eod_df, 'EOD (Afternoon) Strategy')
+
+has_chart = generate_chart(bod_df, eod_df)
+
+md = render_md([bod_stats, eod_stats], has_chart)
 
 with open(README, 'w') as f:
     f.write(md)
