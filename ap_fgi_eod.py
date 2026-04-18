@@ -226,9 +226,12 @@ def execute_trade(signal, current_price):
             qty=qty_to_buy,
             side=OrderSide.BUY,
             time_in_force=TimeInForce.DAY,
-            extended_hours=True
         )
-        trading_client.submit_order(order)
+        try:
+            trading_client.submit_order(order)
+        except Exception as e:
+            print(f"Order submission failed: {e}")
+            return "NO_ACTION", 0, portfolio_value, buying_power
         return "BOUGHT", qty_to_buy, portfolio_value, buying_power
     elif signal == "SELL" and has_position:
         order = MarketOrderRequest(
@@ -236,9 +239,12 @@ def execute_trade(signal, current_price):
             qty=position_qty,
             side=OrderSide.SELL,
             time_in_force=TimeInForce.DAY,
-            extended_hours=True
         )
-        trading_client.submit_order(order)
+        try:
+            trading_client.submit_order(order)
+        except Exception as e:
+            print(f"Order submission failed: {e}")
+            return "NO_ACTION", 0, portfolio_value, buying_power
         return "SOLD", position_qty, portfolio_value, buying_power
     else:
         return "NO_ACTION", 0, portfolio_value, buying_power
@@ -301,8 +307,8 @@ def main():
     print("Fear & Greed Strategy Execution - Starting Continuous Mode")
     print("=" * 60)
     
-    TARGET_HOUR = 13
-    TARGET_MINUTE = 10
+    TARGET_HOUR = 12
+    TARGET_MINUTE = 50
     target_time = datetime.time(TARGET_HOUR, TARGET_MINUTE)
     
     MARKET_OPEN_HOUR = 6
