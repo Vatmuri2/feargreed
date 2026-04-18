@@ -285,6 +285,13 @@ def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, por
     new_log.to_csv(LOG_FILE, mode='a', header=False, index=False)
     print(f"Logged trade: {timestamp} - {action} {qty} {TRADE_SYMBOL} @ ${price} (Held for {days_held} days)")
 
+def is_trading_day():
+    """Check if today is a trading day (regardless of current time)."""
+    nyse = mcal.get_calendar('NYSE')
+    today = datetime.date.today()
+    schedule = nyse.schedule(start_date=today, end_date=today)
+    return not schedule.empty
+
 def is_market_open():
     """Check if market is currently open and it's a trading day."""
     nyse = mcal.get_calendar('NYSE')
