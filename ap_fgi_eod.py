@@ -363,8 +363,22 @@ def main():
         print(f"Sleeping until market open tomorrow at {next_market_open.strftime('%Y-%m-%d %H:%M')} PST ({sleep_seconds/3600:.1f} hours)...")
         time.sleep(sleep_seconds)
 
+def already_executed_today(current_date):
+    """Returns True if the log already has an entry for today, meaning we already ran."""
+    try:
+        log = pd.read_csv(LOG_FILE)
+        if log.empty:
+            return False
+        log['Date'] = pd.to_datetime(log['Timestamp']).dt.date
+        return current_date in log['Date'].values
+    except Exception:
+        return False
+
 def execute_trading_logic(current_date):
     """Execute the actual trading logic"""
+    if already_executed_today(current_date):
+        print(f"Already executed today ({current_date}). Skipping.")
+        return
     print("Executing trading logic...")
     
     fg_data, current_fgi, fgi_column = fetch_and_update_fgi()
