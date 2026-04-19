@@ -5,9 +5,14 @@ Run manually or via cron after market close:
 """
 
 import os
+import subprocess
 import datetime
 import pandas as pd
 import pytz
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import fear_and_greed as fg
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetOrdersRequest
@@ -247,6 +252,72 @@ Momentum-based strategy using CNN Fear & Greed Index to trade SPY.
 """
 
 
+def generate_chart(bod_log, eod_log, bod_acct, eod_acct):
+    """Generate portfolio performance chart from live trading logs."""
+    os.makedirs('assets', exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor('#0d1117')
+    ax.set_facecolor('#0d1117')
+
+    plotted = False
+
+    for log, acct, label, color in [
+        (bod_log, bod_acct, 'BOD Strategy', '#2196F3'),
+        (eod_log, eod_acct, 'EOD Strategy', '#4CAF50'),
+    ]:
+        if not log.empty and 'Portfolio_Value' in log.columns:
+            series = log.sort_values('Timestamp')[['Timestamp', 'Portfolio_Value']].dropna()
+            if not series.empty:
+                ax.plot(series['Timestamp'], series['Portfolio_Value'],
+                        label=label, color=color, linewidth=2)
+                # Mark current value with a dot
+                ax.scatter(series['Timestamp'].iloc[-1], series['Portfolio_Value'].iloc[-1],
+                           color=color, s=60, zorder=5)
+                plotted = True
+        else:
+            # No trades yet — plot a single point at starting equity
+            now = datetime.datetime.now()
+            ax.scatter([now], [acct['portfolio_value']], label=f"{label} (no trades yet)",
+                       color=color, s=80, zorder=5, marker='D')
+
+    ax.axhline(y=25000, color='#555', linestyle='--', linewidth=1, label='Starting Capital ($25,000)')
+
+    ax.set_title('Portfolio Performance — Live Forward Test', color='white', fontsize=14, pad=12)
+    ax.set_xlabel('Date', color='#aaa')
+    ax.set_ylabel('Portfolio Value ($)', color='#aaa')
+    ax.tick_params(colors='#aaa')
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))
+    fig.autofmt_xdate()
+    for spine in ax.spines.values():
+        spine.set_edgecolor('#333')
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'${x:,.0f}'))
+    ax.legend(facecolor='#1a1a2e', edgecolor='#333', labelcolor='white')
+    ax.grid(True, color='#222', linewidth=0.5)
+
+    plt.tight_layout()
+    plt.savefig('assets/portfolio_chart.png', dpi=150, bbox_inches='tight',
+                facecolor=fig.get_facecolor())
+    plt.close()
+    print("Chart saved to assets/portfolio_chart.png")
+
+
+def git_push():
+    """Commit and push README and chart to GitHub."""
+    try:
+        subprocess.run(['git', 'add', 'README.md', 'assets/portfolio_chart.png'], check=True)
+        result = subprocess.run(['git', 'diff', '--cached', '--quiet'])
+        if result.returncode == 0:
+            print("Nothing changed — skipping commit.")
+            return
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+        subprocess.run(['git', 'commit', '-m', f'Dashboard update {now}'], check=True)
+        subprocess.run(['git', 'push'], check=True)
+        print("Pushed to GitHub.")
+    except subprocess.CalledProcessError as e:
+        print(f"Git error: {e}")
+
+
 if __name__ == '__main__':
     print("Fetching account data...")
     bod_acct = get_account_info(BOD_KEY, BOD_SECRET)
@@ -263,8 +334,14 @@ if __name__ == '__main__':
         print(f"Warning: could not fetch FGI: {e}")
         current_fgi = None
 
+    print("Generating chart...")
+    generate_chart(bod_log, eod_log, bod_acct, eod_acct)
+
     print("Writing README.md...")
     with open('README.md', 'w') as f:
         f.write(build_readme(bod_acct, eod_acct, bod_log, eod_log, current_fgi))
+
+    print("Pushing to GitHub...")
+    git_push()
 
     print("Done.")
