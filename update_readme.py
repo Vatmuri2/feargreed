@@ -252,34 +252,59 @@ Momentum-based strategy using CNN Fear & Greed Index to trade SPY.
 """
 
 
+PORTFOLIO_HISTORY = 'portfolio_history.csv'
+
+def snapshot_portfolio(bod_acct, eod_acct):
+    """Append today's portfolio values to portfolio_history.csv regardless of trading activity."""
+    today = datetime.date.today().isoformat()
+    try:
+        hist = pd.read_csv(PORTFOLIO_HISTORY)
+        if today in hist['Date'].values:
+            print("Portfolio snapshot already recorded today — skipping.")
+            return
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        hist = pd.DataFrame(columns=['Date', 'BOD_Value', 'EOD_Value'])
+
+    new_row = pd.DataFrame([{
+        'Date': today,
+        'BOD_Value': bod_acct['portfolio_value'],
+        'EOD_Value': eod_acct['portfolio_value'],
+    }])
+    hist = pd.concat([hist, new_row], ignore_index=True)
+    hist.to_csv(PORTFOLIO_HISTORY, index=False)
+    print(f"Portfolio snapshot saved: BOD=${bod_acct['portfolio_value']:,.2f}  EOD=${eod_acct['portfolio_value']:,.2f}")
+
+
 def generate_chart(bod_log, eod_log, bod_acct, eod_acct):
-    """Generate portfolio performance chart from live trading logs."""
+    """Generate portfolio performance chart using daily portfolio_history.csv snapshots."""
     os.makedirs('assets', exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(12, 5))
     fig.patch.set_facecolor('#0d1117')
     ax.set_facecolor('#0d1117')
 
-    plotted = False
+    try:
+        hist = pd.read_csv(PORTFOLIO_HISTORY, parse_dates=['Date'])
+        hist = hist.sort_values('Date')
 
-    for log, acct, label, color in [
-        (bod_log, bod_acct, 'BOD Strategy', '#2196F3'),
-        (eod_log, eod_acct, 'EOD Strategy', '#4CAF50'),
-    ]:
-        if not log.empty and 'Portfolio_Value' in log.columns:
-            series = log.sort_values('Timestamp')[['Timestamp', 'Portfolio_Value']].dropna()
-            if not series.empty:
-                ax.plot(series['Timestamp'], series['Portfolio_Value'],
-                        label=label, color=color, linewidth=2)
-                # Mark current value with a dot
-                ax.scatter(series['Timestamp'].iloc[-1], series['Portfolio_Value'].iloc[-1],
-                           color=color, s=60, zorder=5)
-                plotted = True
+        if len(hist) >= 2:
+            ax.plot(hist['Date'], hist['BOD_Value'], label='BOD Strategy', color='#2196F3', linewidth=2)
+            ax.plot(hist['Date'], hist['EOD_Value'], label='EOD Strategy', color='#4CAF50', linewidth=2)
+            ax.scatter(hist['Date'].iloc[-1], hist['BOD_Value'].iloc[-1], color='#2196F3', s=60, zorder=5)
+            ax.scatter(hist['Date'].iloc[-1], hist['EOD_Value'].iloc[-1], color='#4CAF50', s=60, zorder=5)
         else:
-            # No trades yet — plot a single point at starting equity
-            now = datetime.datetime.now()
-            ax.scatter([now], [acct['portfolio_value']], label=f"{label} (no trades yet)",
-                       color=color, s=80, zorder=5, marker='D')
+            # Only one data point so far — show dots
+            if not hist.empty:
+                ax.scatter(hist['Date'], hist['BOD_Value'], label='BOD Strategy', color='#2196F3', s=80, zorder=5, marker='D')
+                ax.scatter(hist['Date'], hist['EOD_Value'], label='EOD Strategy', color='#4CAF50', s=80, zorder=5, marker='D')
+            else:
+                now = datetime.datetime.now()
+                ax.scatter([now], [bod_acct['portfolio_value']], label='BOD Strategy (no data yet)', color='#2196F3', s=80, zorder=5, marker='D')
+                ax.scatter([now], [eod_acct['portfolio_value']], label='EOD Strategy (no data yet)', color='#4CAF50', s=80, zorder=5, marker='D')
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        now = datetime.datetime.now()
+        ax.scatter([now], [bod_acct['portfolio_value']], label='BOD Strategy (no data yet)', color='#2196F3', s=80, zorder=5, marker='D')
+        ax.scatter([now], [eod_acct['portfolio_value']], label='EOD Strategy (no data yet)', color='#4CAF50', s=80, zorder=5, marker='D')
 
     ax.axhline(y=25000, color='#555', linestyle='--', linewidth=1, label='Starting Capital ($25,000)')
 
@@ -305,7 +330,7 @@ def generate_chart(bod_log, eod_log, bod_acct, eod_acct):
 def git_push():
     """Commit and push README and chart to GitHub."""
     try:
-        subprocess.run(['git', 'add', 'README.md', 'assets/portfolio_chart.png'], check=True)
+        subprocess.run(['git', 'add', 'README.md', 'assets/portfolio_chart.png', 'portfolio_history.csv'], check=True)
         result = subprocess.run(['git', 'diff', '--cached', '--quiet'])
         if result.returncode == 0:
             print("Nothing changed — skipping commit.")
@@ -333,6 +358,9 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Warning: could not fetch FGI: {e}")
         current_fgi = None
+
+    print("Snapshotting portfolio...")
+    snapshot_portfolio(bod_acct, eod_acct)
 
     print("Generating chart...")
     generate_chart(bod_log, eod_log, bod_acct, eod_acct)
