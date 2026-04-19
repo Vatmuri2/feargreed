@@ -21,8 +21,8 @@ from alpaca.common.exceptions import APIError
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-API_KEY = 'PKQUMZV2BGUAWJDLYXNKMA2J5G'
-API_SECRET = 'FZ2udSfhg9EsXXLS1drsH66HuGgsVZQQvpTSc4GaLrD6'
+API_KEY = os.environ['ALPACA_EOD_API_KEY']
+API_SECRET = os.environ['ALPACA_EOD_API_SECRET']
 BASE_URL = 'https://paper-api.alpaca.markets'
 
 TRADE_SYMBOL = 'SPY'  
