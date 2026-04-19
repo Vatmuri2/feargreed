@@ -25,11 +25,29 @@ def check(label, fn):
 # =============================================================================
 # CONFIG — matches ap_fgi_bod.py and ap_fgi_eod.py
 # =============================================================================
-BOD_KEY    = 'PKRA6EFEHE5TIDXPTF23IZ7IVK'
-BOD_SECRET = 'DeCXNthoXJphrUtqdRW6dquRb7ZAiUUxKeeig5t59UKw'
+import os
 
-EOD_KEY    = 'PKQUMZV2BGUAWJDLYXNKMA2J5G'
-EOD_SECRET = 'FZ2udSfhg9EsXXLS1drsH66HuGgsVZQQvpTSc4GaLrD6'
+# --- Check env vars first ---
+print("\n--- Environment variables ---")
+REQUIRED = ['ALPACA_BOD_API_KEY', 'ALPACA_BOD_API_SECRET', 'ALPACA_EOD_API_KEY', 'ALPACA_EOD_API_SECRET']
+missing = [v for v in REQUIRED if not os.environ.get(v)]
+if missing:
+    for v in REQUIRED:
+        status = PASS if os.environ.get(v) else FAIL
+        results.append((status, v, "set" if status == PASS else "MISSING"))
+        print(f"  [{status}] {v}: {'set' if status == PASS else 'MISSING'}")
+    print(f"\nFATAL: Missing env vars: {missing}")
+    print("Run: export ALPACA_BOD_API_KEY=... etc.")
+    sys.exit(1)
+else:
+    for v in REQUIRED:
+        results.append((PASS, v, "set"))
+        print(f"  [{PASS}] {v}: set")
+
+BOD_KEY    = os.environ['ALPACA_BOD_API_KEY']
+BOD_SECRET = os.environ['ALPACA_BOD_API_SECRET']
+EOD_KEY    = os.environ['ALPACA_EOD_API_KEY']
+EOD_SECRET = os.environ['ALPACA_EOD_API_SECRET']
 
 SYMBOL = 'SPY'
 
