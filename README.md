@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-04-18 23:47 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-04-18 23:56 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
