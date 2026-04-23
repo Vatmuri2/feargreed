@@ -216,7 +216,7 @@ def execute_trade(signal, current_price):
     portfolio_value = float(account.portfolio_value)
     buying_power = float(account.buying_power)
     has_position, position_qty = get_current_position(TRADE_SYMBOL)
-    
+
     if signal == "BUY" and not has_position:
         qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
@@ -235,7 +235,9 @@ def execute_trade(signal, current_price):
         except Exception as e:
             print(f"Order submission failed: {e}")
             return "NO_ACTION", 0, portfolio_value, buying_power
-        return "BOUGHT", qty_to_buy, portfolio_value, buying_power
+        time.sleep(3)
+        account = trading_client.get_account()
+        return "BOUGHT", qty_to_buy, float(account.portfolio_value), float(account.buying_power)
     elif signal == "SELL" and has_position:
         limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure fill
         order = LimitOrderRequest(
@@ -251,7 +253,9 @@ def execute_trade(signal, current_price):
         except Exception as e:
             print(f"Order submission failed: {e}")
             return "NO_ACTION", 0, portfolio_value, buying_power
-        return "SOLD", position_qty, portfolio_value, buying_power
+        time.sleep(3)
+        account = trading_client.get_account()
+        return "SOLD", position_qty, float(account.portfolio_value), float(account.buying_power)
     else:
         return "NO_ACTION", 0, portfolio_value, buying_power
 
