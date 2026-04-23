@@ -1,5 +1,4 @@
 Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volatility,Portfolio_Value,Buying_Power,Signal_Reason,Days_Held
-2026-04-17 20:41:31,BOUGHT,SPY,281,710.1400146484375,68.09,1.5833333333333286,3.486666666666667,0.1894,100000.0,200000.0,"Strong momentum/velocity, low volatility",0
 2026-04-20 06:30:03,NO_ACTION,SPY,0,708.99,68.09,0.0,1.5833333333333333,0.1907,25000.0,50000.0,Insufficient momentum/velocity for entry,0
 2026-04-21 06:30:03,BOUGHT,SPY,70,710.2,70.91,1.8799999999999812,0.9399999999999977,0.1798,25000.0,50000.0,"Strong momentum/velocity, low volatility",0
 2026-04-22 06:30:22,SOLD,SPY,70,709.235,67.74,-1.1733333333333462,-0.11666666666666951,0.1824,24941.16,258.62,Momentum reversal or high volatility,1
