@@ -220,7 +220,7 @@ def execute_trade(signal, current_price):
     account = trading_client.get_account()
     buying_power = float(account.buying_power)
     portfolio_value = float(account.portfolio_value)
-    
+
     has_pos, qty = get_current_position(TRADE_SYMBOL)
 
     if signal == "BUY" and not has_pos:
@@ -241,7 +241,9 @@ def execute_trade(signal, current_price):
         except Exception as e:
             print(f"Order submission failed: {e}")
             return "NO_ACTION", 0, portfolio_value, buying_power
-        return "BOUGHT", qty_to_buy, portfolio_value, buying_power
+        time.sleep(3)
+        account = trading_client.get_account()
+        return "BOUGHT", qty_to_buy, float(account.portfolio_value), float(account.buying_power)
 
     elif signal == "SELL" and has_pos:
         limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure pre-market fill
@@ -258,7 +260,9 @@ def execute_trade(signal, current_price):
         except Exception as e:
             print(f"Order submission failed: {e}")
             return "NO_ACTION", 0, portfolio_value, buying_power
-        return "SOLD", qty, portfolio_value, buying_power
+        time.sleep(3)
+        account = trading_client.get_account()
+        return "SOLD", qty, float(account.portfolio_value), float(account.buying_power)
 
     return "NO_ACTION", 0, portfolio_value, buying_power
 
