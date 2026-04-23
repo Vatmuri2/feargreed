@@ -11,7 +11,7 @@ import yfinance as yf
 # Alpaca Trading imports (still used for orders)
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import LimitOrderRequest, GetOrdersRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
 from alpaca.common.exceptions import APIError
 
 
@@ -216,6 +216,25 @@ def generate_signal(fg_data, current_volatility):
     
     return signal, reason, latest_data['fg_momentum'], latest_data['fg_velocity'], days_held # <-- Return days_held
 
+_TERMINAL_ORDER_STATUSES = {
+    OrderStatus.FILLED,
+    OrderStatus.CANCELED,
+    OrderStatus.EXPIRED,
+    OrderStatus.REJECTED,
+}
+
+
+def wait_for_fill(order_id, timeout_sec=180):
+    """Poll the order until it reaches a terminal state. Returns the final order object."""
+    order = None
+    for _ in range(timeout_sec):
+        order = trading_client.get_order_by_id(order_id)
+        if order.status in _TERMINAL_ORDER_STATUSES:
+            return order
+        time.sleep(1)
+    return order
+
+
 def execute_trade(signal, current_price):
     account = trading_client.get_account()
     buying_power = float(account.buying_power)
@@ -226,7 +245,7 @@ def execute_trade(signal, current_price):
     if signal == "BUY" and not has_pos:
         qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
-            return "NO_ACTION", 0, portfolio_value, buying_power
+            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
         limit_price = round(current_price * 1.002, 2)  # 0.2% above to ensure pre-market fill
         order = LimitOrderRequest(
             symbol=TRADE_SYMBOL,
@@ -237,13 +256,19 @@ def execute_trade(signal, current_price):
             extended_hours=True,
         )
         try:
-            trading_client.submit_order(order)
+            submitted = trading_client.submit_order(order)
         except Exception as e:
             print(f"Order submission failed: {e}")
-            return "NO_ACTION", 0, portfolio_value, buying_power
-        time.sleep(3)
+            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
+
+        filled = wait_for_fill(submitted.id)
         account = trading_client.get_account()
-        return "BOUGHT", qty_to_buy, float(account.portfolio_value), float(account.buying_power)
+        filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
+        if filled_qty == 0:
+            print(f"BUY order {submitted.id} did not fill (status={filled.status})")
+            return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power)
+        fill_price = float(filled.filled_avg_price)
+        return "BOUGHT", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power)
 
     elif signal == "SELL" and has_pos:
         limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure pre-market fill
@@ -256,15 +281,21 @@ def execute_trade(signal, current_price):
             extended_hours=True,
         )
         try:
-            trading_client.submit_order(order)
+            submitted = trading_client.submit_order(order)
         except Exception as e:
             print(f"Order submission failed: {e}")
-            return "NO_ACTION", 0, portfolio_value, buying_power
-        time.sleep(3)
-        account = trading_client.get_account()
-        return "SOLD", qty, float(account.portfolio_value), float(account.buying_power)
+            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
 
-    return "NO_ACTION", 0, portfolio_value, buying_power
+        filled = wait_for_fill(submitted.id)
+        account = trading_client.get_account()
+        filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
+        if filled_qty == 0:
+            print(f"SELL order {submitted.id} did not fill (status={filled.status})")
+            return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power)
+        fill_price = float(filled.filled_avg_price)
+        return "SOLD", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power)
+
+    return "NO_ACTION", 0, current_price, portfolio_value, buying_power
 
 def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, portfolio_value, buying_power, reason, days_held): # Add parameter
     """Logs all trade details to CSV file."""
@@ -426,9 +457,9 @@ def execute_trading_logic(current_date):
 
     
     signal, reason, momentum, velocity, days_held = generate_signal(fg_data, current_volatility)
-    action, qty, portfolio_value, buying_power = execute_trade(signal, current_price)
-    
-    log_trade(action, qty, current_price, current_fgi, momentum, 
+    action, qty, fill_price, portfolio_value, buying_power = execute_trade(signal, current_price)
+
+    log_trade(action, qty, fill_price, current_fgi, momentum,
           velocity, current_volatility, portfolio_value, buying_power, reason, days_held)
     
     print("\n" + "=" * 60)
@@ -440,7 +471,8 @@ def execute_trading_logic(current_date):
     print(f"F&G Momentum: {momentum:.2f} (threshold: {MOMENTUM_THRESHOLD:.2f})")
     print(f"F&G Velocity: {velocity:.2f} (threshold: {VELOCITY_THRESHOLD:.2f})")
     print(f"Volatility: {current_volatility:.4f} (limit: {VOLATILITY_BUY_LIMIT:.4f})")
-    print(f"SPY Price: ${current_price:.2f}")
+    print(f"SPY Price (quote): ${current_price:.2f}")
+    print(f"SPY Price (fill) : ${fill_price:.2f}")
     print(f"Portfolio Value: ${portfolio_value:.2f}")
     print(f"Buying Power: ${buying_power:.2f}")
     print("=" * 60)
