@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-04-24 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-04-27 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -12,12 +12,12 @@
 |--------|-------|
 | Portfolio Value | **$24,932.04** |
 | Buying Power | $49,864.08 |
-| Current FGI | 66.69 |
+| Current FGI | 66.03 |
 | Position | FLAT |
 | Total P&L | **$-68** |
 | Win Rate | 0% (0W / 1L) |
 | Total Round Trips | 1 |
-| Last Signal | NO_ACTION @ 2026-04-24 06:30 |
+| Last Signal | NO_ACTION @ 2026-04-27 06:30 |
 
 <details>
 <summary>Trade History (1 trades)</summary>
@@ -33,11 +33,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 04-27 06:30 | NO_ACTION | $713.19 | 66.03 | -0.31 | -0.57 | 0.1655 | Insufficient momentum/velocity for entry |
 | 04-24 06:30 | NO_ACTION | $710.99 | 66.69 | -0.22 | -1.41 | 0.1841 | Insufficient momentum/velocity for entry |
 | 04-23 13:42 | NO_ACTION | $708.45 | 66.31 | -2.01 | -0.59 | 0.1818 | Insufficient momentum/velocity for entry |
 | 04-22 06:30 | SOLD | $709.24 | 67.74 | -1.17 | -0.12 | 0.1824 | Momentum reversal or high volatility |
 | 04-21 06:30 | BOUGHT | $710.20 | 70.91 | 1.88 | 0.94 | 0.1798 | Strong momentum/velocity, low volatility |
-| 04-20 06:30 | NO_ACTION | $708.99 | 68.09 | 0.00 | 1.58 | 0.1907 | Insufficient momentum/velocity for entry |
 
 </details>
 
@@ -49,12 +49,12 @@
 |--------|-------|
 | Portfolio Value | **$24,759.44** |
 | Buying Power | $49,518.88 |
-| Current FGI | 65.8 |
+| Current FGI | 67.34 |
 | Position | FLAT |
 | Total P&L | **$-323** |
 | Win Rate | 0% (0W / 1L) |
 | Total Round Trips | 1 |
-| Last Signal | NO_ACTION @ 2026-04-24 13:10 |
+| Last Signal | NO_ACTION @ 2026-04-27 13:10 |
 
 <details>
 <summary>Trade History (1 trades)</summary>
@@ -70,11 +70,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 04-27 13:10 | NO_ACTION | $715.10 | 67.34 | 0.86 | -0.25 | 0.1655 | Insufficient momentum/velocity for entry |
 | 04-24 13:10 | NO_ACTION | $713.97 | 65.8 | -0.93 | -0.47 | 0.1841 | Insufficient momentum/velocity for entry |
 | 04-23 13:42 | NO_ACTION | $708.45 | 66.31 | -0.89 | -1.07 | 0.1818 | Insufficient momentum/velocity for entry |
 | 04-22 13:10 | NO_ACTION | $711.18 | 68.09 | -0.18 | 0.00 | 0.1824 | Insufficient momentum/velocity for entry |
 | 04-21 13:10 | SOLD | $704.15 | 67.2 | -1.07 | -0.30 | 0.1798 | Momentum reversal or high volatility |
-| 04-20 13:10 | BOUGHT | $708.76 | 69.51 | 0.95 | 2.06 | 0.1907 | Strong momentum/velocity, low volatility |
 
 </details>
 
