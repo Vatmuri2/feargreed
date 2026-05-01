@@ -35,6 +35,8 @@ VOLATILITY_SELL_LIMIT = 0.5
 LOOKBACK_DAYS = 3
 VOLATILITY_WINDOW = 20  # Days for volatility calculation
 MAX_DAYS_HELD = 8  # Max days to hold a position
+BUY_LIMIT_MULTIPLIERS = [1.002, 1.005, 1.01]   # progressively wider on retry
+SELL_LIMIT_MULTIPLIERS = [0.998, 0.995, 0.99]  # progressively wider on retry
 
 # =============================================================================
 # SETUP LOGGING
@@ -245,57 +247,78 @@ def execute_trade(signal, current_price):
     if signal == "BUY" and not has_pos:
         qty_to_buy = int(buying_power / current_price)
         if qty_to_buy <= 0:
-            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
-        limit_price = round(current_price * 1.002, 2)  # 0.2% above to ensure pre-market fill
-        order = LimitOrderRequest(
-            symbol=TRADE_SYMBOL,
-            qty=qty_to_buy,
-            side=OrderSide.BUY,
-            time_in_force=TimeInForce.DAY,
-            limit_price=limit_price,
-            extended_hours=True,
-        )
-        try:
-            submitted = trading_client.submit_order(order)
-        except Exception as e:
-            print(f"Order submission failed: {e}")
-            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
+            return "NO_ACTION", 0, current_price, portfolio_value, buying_power, "Insufficient buying power"
 
-        filled = wait_for_fill(submitted.id)
+        for attempt, multiplier in enumerate(BUY_LIMIT_MULTIPLIERS, 1):
+            limit_price = round(current_price * multiplier, 2)
+            order = LimitOrderRequest(
+                symbol=TRADE_SYMBOL,
+                qty=qty_to_buy,
+                side=OrderSide.BUY,
+                time_in_force=TimeInForce.DAY,
+                limit_price=limit_price,
+                extended_hours=True,
+            )
+            try:
+                submitted = trading_client.submit_order(order)
+            except Exception as e:
+                print(f"BUY attempt {attempt} submission failed: {e}")
+                if attempt == len(BUY_LIMIT_MULTIPLIERS):
+                    return "NO_ACTION", 0, current_price, portfolio_value, buying_power, f"BUY order submission failed after {attempt} attempts: {e}"
+                continue
+
+            filled = wait_for_fill(submitted.id)
+            account = trading_client.get_account()
+            filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
+            if filled_qty > 0:
+                fill_price = float(filled.filled_avg_price)
+                return "BOUGHT", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power), None
+
+            print(f"BUY attempt {attempt} did not fill (status={filled.status}), retrying with wider limit")
+            try:
+                trading_client.cancel_order_by_id(submitted.id)
+            except Exception:
+                pass
+
         account = trading_client.get_account()
-        filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
-        if filled_qty == 0:
-            print(f"BUY order {submitted.id} did not fill (status={filled.status})")
-            return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power)
-        fill_price = float(filled.filled_avg_price)
-        return "BOUGHT", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power)
+        return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power), f"BUY order did not fill after {len(BUY_LIMIT_MULTIPLIERS)} attempts"
 
     elif signal == "SELL" and has_pos:
-        limit_price = round(current_price * 0.998, 2)  # 0.2% below to ensure pre-market fill
-        order = LimitOrderRequest(
-            symbol=TRADE_SYMBOL,
-            qty=qty,
-            side=OrderSide.SELL,
-            time_in_force=TimeInForce.DAY,
-            limit_price=limit_price,
-            extended_hours=True,
-        )
-        try:
-            submitted = trading_client.submit_order(order)
-        except Exception as e:
-            print(f"Order submission failed: {e}")
-            return "NO_ACTION", 0, current_price, portfolio_value, buying_power
+        for attempt, multiplier in enumerate(SELL_LIMIT_MULTIPLIERS, 1):
+            limit_price = round(current_price * multiplier, 2)
+            order = LimitOrderRequest(
+                symbol=TRADE_SYMBOL,
+                qty=qty,
+                side=OrderSide.SELL,
+                time_in_force=TimeInForce.DAY,
+                limit_price=limit_price,
+                extended_hours=True,
+            )
+            try:
+                submitted = trading_client.submit_order(order)
+            except Exception as e:
+                print(f"SELL attempt {attempt} submission failed: {e}")
+                if attempt == len(SELL_LIMIT_MULTIPLIERS):
+                    return "NO_ACTION", 0, current_price, portfolio_value, buying_power, f"SELL order submission failed after {attempt} attempts: {e}"
+                continue
 
-        filled = wait_for_fill(submitted.id)
+            filled = wait_for_fill(submitted.id)
+            account = trading_client.get_account()
+            filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
+            if filled_qty > 0:
+                fill_price = float(filled.filled_avg_price)
+                return "SOLD", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power), None
+
+            print(f"SELL attempt {attempt} did not fill (status={filled.status}), retrying with wider limit")
+            try:
+                trading_client.cancel_order_by_id(submitted.id)
+            except Exception:
+                pass
+
         account = trading_client.get_account()
-        filled_qty = int(float(filled.filled_qty)) if filled.filled_qty else 0
-        if filled_qty == 0:
-            print(f"SELL order {submitted.id} did not fill (status={filled.status})")
-            return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power)
-        fill_price = float(filled.filled_avg_price)
-        return "SOLD", filled_qty, fill_price, float(account.portfolio_value), float(account.buying_power)
+        return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power), f"SELL order did not fill after {len(SELL_LIMIT_MULTIPLIERS)} attempts"
 
-    return "NO_ACTION", 0, current_price, portfolio_value, buying_power
+    return "NO_ACTION", 0, current_price, portfolio_value, buying_power, None
 
 def log_trade(action, qty, price, fgi_value, momentum, velocity, volatility, portfolio_value, buying_power, reason, days_held): # Add parameter
     """Logs all trade details to CSV file."""
@@ -457,7 +480,9 @@ def execute_trading_logic(current_date):
 
     
     signal, reason, momentum, velocity, days_held = generate_signal(fg_data, current_volatility)
-    action, qty, fill_price, portfolio_value, buying_power = execute_trade(signal, current_price)
+    action, qty, fill_price, portfolio_value, buying_power, exec_reason = execute_trade(signal, current_price)
+    if exec_reason is not None:
+        reason = exec_reason
 
     log_trade(action, qty, fill_price, current_fgi, momentum,
           velocity, current_volatility, portfolio_value, buying_power, reason, days_held)
