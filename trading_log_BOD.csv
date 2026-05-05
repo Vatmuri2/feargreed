@@ -10,3 +10,4 @@ Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volat
 2026-04-30 06:30:02,NO_ACTION,SPY,0,714.69,63.43,-1.6100000000000207,-0.8666666666666671,0.1186,24932.04,49864.08,Insufficient momentum/velocity for entry,0
 2026-05-01 06:30:03,NO_ACTION,SPY,0,721.32,66.77,2.0933333333333195,-0.36333333333333445,0.1197,24932.04,49864.08,Insufficient momentum/velocity for entry,0
 2026-05-04 06:32:04,BOUGHT,SPY,69,719.65,66.11,0.6733333333333178,0.7600000000000003,0.1191,24938.94,215.13,"Strong momentum/velocity, low volatility",0
+2026-05-05 06:33:07,NO_ACTION,SPY,0,721.8,62.17,-2.8466666666666782,-0.4199999999999993,0.1228,25082.46,358.65,"SELL order submission failed after 3 attempts: {""buying_power"":""50156.64"",""code"":40310000,""cost_basis"":""51313.96"",""message"":""insufficient buying power""}",1
