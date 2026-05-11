@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-05-08 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-05-11 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -10,14 +10,14 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Value | **$25,477.50** |
-| Buying Power | $3,900.28 |
-| Current FGI | 66.77 |
+| Portfolio Value | **$25,389.79** |
+| Buying Power | $3,637.18 |
+| Current FGI | 66.91 |
 | Position | FLAT |
 | Total P&L | **$+995** |
 | Win Rate | 50% (1W / 1L) |
 | Total Round Trips | 2 |
-| Last Signal | SOLD @ 2026-05-08 06:34 |
+| Last Signal | NO_ACTION @ 2026-05-11 06:30 |
 
 <details>
 <summary>Trade History (2 trades)</summary>
@@ -34,11 +34,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 05-11 06:30 | NO_ACTION | $736.53 | 66.91 | -0.53 | -0.12 | 0.1045 | SELL order submission failed after 3 attempts: {"code":40010001,"message":"qty must be \u003e 0"} |
 | 05-08 06:34 | SOLD | $735.05 | 66.77 | -0.78 | 1.53 | 0.1046 | Momentum reversal or high volatility |
 | 05-07 06:30 | NO_ACTION | $735.07 | 68.63 | 2.61 | 0.84 | 0.1017 | Holding position - indicators still favorable (1/8 days) |
 | 05-06 06:33 | NO_ACTION | $728.12 | 67.26 | 2.08 | 0.16 | 0.1226 | BUY order submission failed after 3 attempts: {"buying_power":"607.24","code":40310000,"cost_basis":"50007.2","message":"insufficient buying power"} |
 | 05-05 06:33 | NO_ACTION | $721.80 | 62.17 | -2.85 | -0.42 | 0.1228 | SELL order submission failed after 3 attempts: {"buying_power":"50156.64","code":40310000,"cost_basis":"51313.96","message":"insufficient buying power"} |
-| 05-04 06:32 | BOUGHT | $719.65 | 66.11 | 0.67 | 0.76 | 0.1191 | Strong momentum/velocity, low volatility |
 
 </details>
 
@@ -50,12 +50,12 @@
 |--------|-------|
 | Portfolio Value | **$25,091.36** |
 | Buying Power | $50,182.72 |
-| Current FGI | 67.14 |
+| Current FGI | 67.34 |
 | Position | FLAT |
 | Total P&L | **$+9** |
 | Win Rate | 33% (1W / 2L) |
 | Total Round Trips | 3 |
-| Last Signal | NO_ACTION @ 2026-05-08 13:10 |
+| Last Signal | NO_ACTION @ 2026-05-11 13:10 |
 
 <details>
 <summary>Trade History (3 trades)</summary>
@@ -73,11 +73,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 05-11 13:10 | NO_ACTION | $739.26 | 67.34 | -0.06 | -0.40 | 0.1045 | Insufficient momentum/velocity for entry |
 | 05-08 13:10 | NO_ACTION | $737.53 | 67.14 | -0.66 | -0.06 | 0.1046 | Insufficient momentum/velocity for entry |
 | 05-07 13:11 | SOLD | $731.90 | 67.71 | -0.14 | 1.48 | 0.1017 | Momentum reversal or high volatility |
 | 05-06 13:10 | NO_ACTION | $733.86 | 68.54 | 2.17 | 0.65 | 0.1226 | Holding position - indicators still favorable (1/8 days) |
 | 05-05 13:11 | BOUGHT | $723.86 | 67.31 | 1.59 | 0.28 | 0.1228 | Strong momentum/velocity, low volatility |
-| 05-04 13:11 | SOLD | $717.38 | 63.26 | -2.18 | 0.01 | 0.1191 | Momentum reversal or high volatility |
 
 </details>
 
