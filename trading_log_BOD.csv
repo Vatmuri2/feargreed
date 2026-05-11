@@ -14,3 +14,4 @@ Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volat
 2026-05-06 06:33:05,NO_ACTION,SPY,0,728.12,67.26,2.0799999999999983,0.16333333333333636,0.1226,25078.3,50156.6,"BUY order submission failed after 3 attempts: {""buying_power"":""607.24"",""code"":40310000,""cost_basis"":""50007.2"",""message"":""insufficient buying power""}",0
 2026-05-07 06:30:02,NO_ACTION,SPY,0,735.065,68.63,2.6099999999999994,0.8399999999999986,0.1017,25478.78,3918.2,Holding position - indicators still favorable (1/8 days),1
 2026-05-08 06:34:06,SOLD,SPY,64,735.05,66.77,-0.7833333333333456,1.5333333333333314,0.1046,25477.5,3900.28,Momentum reversal or high volatility,2
+2026-05-11 06:30:04,NO_ACTION,SPY,0,736.53,66.91,-0.526666666666685,-0.11666666666666951,0.1045,25389.79,3637.18,"SELL order submission failed after 3 attempts: {""code"":40010001,""message"":""qty must be \u003e 0""}",5
