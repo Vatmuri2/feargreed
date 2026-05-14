@@ -141,3 +141,9 @@ Dockerfile
 
 # macOS
 .DS_Store
+
+# IDE
+.vscode/
+
+# Git internal file if accidentally created at repo root
+FETCH_HEAD

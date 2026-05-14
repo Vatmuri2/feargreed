@@ -154,7 +154,10 @@ def get_current_volatility(symbol, window=VOLATILITY_WINDOW):
 def get_current_position(symbol):
     try:
         position = trading_client.get_open_position(symbol)
-        return True, int(float(position.qty))
+        qty = int(float(position.qty))
+        if qty <= 0:
+            return False, 0
+        return True, qty
     except APIError:
         return False, 0
 
@@ -315,8 +318,14 @@ def execute_trade(signal, current_price):
             except Exception:
                 pass
 
-        account = trading_client.get_account()
-        return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power), f"SELL order did not fill after {len(SELL_LIMIT_MULTIPLIERS)} attempts"
+        # All limit attempts failed — close at market as last resort
+        try:
+            trading_client.close_position(TRADE_SYMBOL)
+            account = trading_client.get_account()
+            return "SOLD", qty, current_price, float(account.portfolio_value), float(account.buying_power), "Closed via market order fallback after limit failures"
+        except Exception as close_err:
+            account = trading_client.get_account()
+            return "NO_ACTION", 0, current_price, float(account.portfolio_value), float(account.buying_power), f"SELL failed after all attempts including market fallback: {close_err}"
 
     return "NO_ACTION", 0, current_price, portfolio_value, buying_power, None
 
@@ -454,11 +463,32 @@ def already_executed_today(current_date):
     except Exception:
         return False
 
+def close_unexpected_short():
+    """Detect and close any short position immediately. Returns True if a short was found."""
+    try:
+        position = trading_client.get_open_position(TRADE_SYMBOL)
+        qty = int(float(position.qty))
+        if qty < 0:
+            print(f"WARNING: Unexpected short position of {qty} shares detected. Closing immediately.")
+            trading_client.close_position(TRADE_SYMBOL)
+            print("Short position close order submitted.")
+            return True
+    except APIError:
+        pass
+    except Exception as e:
+        print(f"Error during short position check: {e}")
+    return False
+
 def execute_trading_logic(current_date):
     """Execute the actual trading logic"""
     if already_executed_today(current_date):
         print(f"Already executed today ({current_date}). Skipping.")
         return
+
+    if close_unexpected_short():
+        print("Skipping rest of trading logic after closing unexpected short.")
+        return
+
     print("Executing trading logic...")
 
     fg_data, current_fgi, fgi_column = fetch_and_update_fgi()
