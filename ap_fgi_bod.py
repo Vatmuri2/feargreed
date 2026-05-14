@@ -254,20 +254,31 @@ def execute_trade(signal, current_price):
 
         for attempt, multiplier in enumerate(BUY_LIMIT_MULTIPLIERS, 1):
             limit_price = round(current_price * multiplier, 2)
-            order = LimitOrderRequest(
-                symbol=TRADE_SYMBOL,
-                qty=qty_to_buy,
-                side=OrderSide.BUY,
-                time_in_force=TimeInForce.DAY,
-                limit_price=limit_price,
-                extended_hours=True,
-            )
-            try:
-                submitted = trading_client.submit_order(order)
-            except Exception as e:
-                print(f"BUY attempt {attempt} submission failed: {e}")
+            submitted = None
+            current_qty = qty_to_buy
+            while current_qty > 0:
+                order = LimitOrderRequest(
+                    symbol=TRADE_SYMBOL,
+                    qty=current_qty,
+                    side=OrderSide.BUY,
+                    time_in_force=TimeInForce.DAY,
+                    limit_price=limit_price,
+                    extended_hours=True,
+                )
+                try:
+                    submitted = trading_client.submit_order(order)
+                    break
+                except Exception as e:
+                    err = str(e)
+                    if ("40310000" in err or "insufficient buying power" in err.lower()) and current_qty > 1:
+                        current_qty -= 1
+                        print(f"BUY attempt {attempt}: buying power constrained, retrying with {current_qty} shares")
+                        continue
+                    print(f"BUY attempt {attempt} submission failed: {e}")
+                    break
+            if submitted is None:
                 if attempt == len(BUY_LIMIT_MULTIPLIERS):
-                    return "NO_ACTION", 0, current_price, portfolio_value, buying_power, f"BUY order submission failed after {attempt} attempts: {e}"
+                    return "NO_ACTION", 0, current_price, portfolio_value, buying_power, f"BUY order submission failed after {attempt} attempts"
                 continue
 
             filled = wait_for_fill(submitted.id)
@@ -499,6 +510,9 @@ def execute_trading_logic(current_date):
     fg_data = calculate_indicators(fg_data, fgi_column)
     
     current_volatility = get_current_volatility(TRADE_SYMBOL)
+    if current_volatility is None:
+        print("Failed to calculate volatility. Skipping execution today.")
+        return
 
     # Fetch latest price
     try:
