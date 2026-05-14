@@ -17,3 +17,4 @@ Timestamp,Action,Symbol,Quantity,Price,FGI_Value,FGI_Momentum,FGI_Velocity,Volat
 2026-05-11 06:30:04,NO_ACTION,SPY,0,736.53,66.91,-0.526666666666685,-0.11666666666666951,0.1045,25389.79,3637.18,"SELL order submission failed after 3 attempts: {""code"":40010001,""message"":""qty must be \u003e 0""}",5
 2026-05-12 06:30:04,NO_ACTION,SPY,0,736.98,65.91,-0.6200000000000045,-0.9066666666666663,0.1025,25355.23,3533.5,"SELL order submission failed after 3 attempts: {""code"":40010001,""message"":""qty must be \u003e 0""}",6
 2026-05-13 06:30:03,NO_ACTION,SPY,0,738.3,65.54,-0.5799999999999983,-0.4099999999999966,0.099,25292.51,3345.34,"SELL order submission failed after 3 attempts: {""code"":40010001,""message"":""qty must be \u003e 0""}",7
+2026-05-14 06:30:03,NO_ACTION,SPY,0,743.72,64.37,-0.9033333333333502,-0.846666666666664,0.0979,24937.95,2281.66,"SELL order submission failed after 3 attempts: {""code"":40010001,""message"":""qty must be \u003e 0""}",8
