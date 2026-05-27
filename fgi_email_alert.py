@@ -89,16 +89,36 @@ def load_fg_history() -> pd.DataFrame:
 
 def build_stats_dataset(fg_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Download SPY, merge with FG history, compute momentum/velocity and
+    Load or download SPY, merge with FG history, compute momentum/velocity and
     forward returns for every trading day. Returns the merged DataFrame.
+    SPY data is cached as a dated parquet; files older than 3 days are removed.
     """
-    end_date = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
-    spy = yf.download("SPY", start=SPY_START, end=end_date,
-                      auto_adjust=True, progress=False)
-    if spy.columns.nlevels > 1:
-        spy.columns = spy.columns.droplevel(1)
-    spy = spy.reset_index()[["Date", "Close"]]
-    spy["Date"] = pd.to_datetime(spy["Date"])
+    today = datetime.date.today()
+    cache_path = BASE_DIR / "datasets" / f"spy_{today.isoformat()}.csv"
+
+    # Remove stale cache files (older than 3 days)
+    cutoff = today - datetime.timedelta(days=3)
+    for old in (BASE_DIR / "datasets").glob("spy_*.csv"):
+        try:
+            file_date = datetime.date.fromisoformat(old.stem[4:])
+            if file_date < cutoff:
+                old.unlink()
+        except ValueError:
+            pass
+
+    if cache_path.exists():
+        print("Loading SPY from cache ...")
+        spy = pd.read_csv(cache_path, parse_dates=["Date"])
+    else:
+        end_date = (today + datetime.timedelta(days=1)).isoformat()
+        spy = yf.download("SPY", start=SPY_START, end=end_date,
+                          auto_adjust=True, progress=False)
+        if spy.columns.nlevels > 1:
+            spy.columns = spy.columns.droplevel(1)
+        spy = spy.reset_index()[["Date", "Close"]]
+        spy["Date"] = pd.to_datetime(spy["Date"])
+        spy.to_csv(cache_path, index=False)
+        print("SPY downloaded and cached.")
 
     data = spy.merge(fg_df, on="Date", how="left")
     data["fg"] = data["fg"].ffill()
@@ -210,30 +230,12 @@ def analyse_conditions(data: pd.DataFrame,
 
 
 # ── Signal label ─────────────────────────────────────────────────────────────
-def signal_label(momentum: float, velocity: float, fg_value: float) -> str:
-    zone, _, _ = get_zone(fg_value)
-
-    # Score based on momentum and velocity magnitude
-    mom_score = (1 if momentum >= 2.0 else
-                 0.75 if momentum >= 1.0 else
-                 0.5  if momentum >= 0.2 else
-                 0.25 if momentum >= 0.0 else 0)
-    vel_score = (1 if velocity >= 1.0 else
-                 0.75 if velocity >= 0.5 else
-                 0.5  if velocity >= 0.15 else
-                 0.25 if velocity >= 0.0 else 0)
-
-    combined = (mom_score + vel_score) / 2
-
-    if momentum < 0 and velocity < 0:
-        return "NO SIGNAL  (momentum and velocity both negative)"
-    if combined >= 0.75:
-        return "STRONG BUY signal"
-    if combined >= 0.5:
-        return "MODERATE BUY signal"
-    if combined >= 0.25:
-        return "WEAK BUY signal"
-    return "NO SIGNAL  (below threshold)"
+def signal_label(momentum: float, velocity: float) -> str:
+    if momentum >= 2.0 and velocity >= 1.0:
+        return "STRONG BUY"
+    if momentum >= 0.2 and velocity >= 0.15:
+        return "BUY"
+    return "NO SIGNAL"
 
 
 def kelly_label(half_kelly: float) -> str:
@@ -256,23 +258,26 @@ def build_email(fg_value: float,
                 last_update: datetime.datetime,
                 momentum: float,
                 velocity: float,
-                analysis: dict) -> EmailMessage:
+                analysis: dict,
+                analysis_ok: bool = True) -> EmailMessage:
 
     zone_name, zlo, zhi = get_zone(fg_value)
-    today      = datetime.date.today().strftime("%B %d, %Y")
-    signal     = signal_label(momentum, velocity, fg_value)
+    today  = datetime.date.today().strftime("%B %d, %Y")
+    signal = signal_label(momentum, velocity)
 
-    # Primary stats tier -- use most specific tier that has enough data
+    # Most specific tier with enough data
     primary = analysis["exact_bin"] or analysis["tier3"] or analysis["tier2"] or analysis["tier1"]
 
-    subject = (f"F&G {fg_value} ({zone_name}) | "
-               f"mom={momentum:+.2f} vel={velocity:+.2f} | "
-               f"{signal.split()[0]}")
+    # Subject: include 10d win rate if available
+    wr10_str = ""
+    if primary:
+        wr10_str = f" | 10d win rate {primary['wr10d']*100:.1f}%"
+    subject = f"F&G Signal: {signal} | {fg_value} {zone_name}{wr10_str}"
 
     def fmt_tier(t: dict | None) -> str:
         if t is None:
             return f"    (fewer than {MIN_SAMPLES} observations -- not reported)\n"
-        lines = [f"    Observations: {t['n']}"]
+        lines = [f"    Observations: {t['n']}  ({t['label']})"]
         header = f"    {'Horizon':<9} {'Win Rate':>9} {'Avg Ret':>9} {'Median':>9} {'95% CI':>10} {'Sharpe':>8}"
         lines.append(header)
         lines.append("    " + "-" * 58)
@@ -290,12 +295,11 @@ def build_email(fg_value: float,
     def fmt_position(t: dict | None, horizon: int = 5) -> str:
         if t is None:
             return "    Insufficient data to size position.\n"
-        wr        = t[f"wr{horizon}d"]
-        mu        = t[f"mu{horizon}d"]
-        avg_win   = t[f"avg_win{horizon}d"]
-        avg_loss  = t[f"avg_loss{horizon}d"]
-        hk        = t[f"kelly{horizon}d"]
-        b         = avg_win / avg_loss if avg_loss > 0 else 0.0
+        wr      = t[f"wr{horizon}d"]
+        avg_win = t[f"avg_win{horizon}d"]
+        avg_loss= t[f"avg_loss{horizon}d"]
+        hk      = t[f"kelly{horizon}d"]
+        b       = avg_win / avg_loss if avg_loss > 0 else 0.0
         lines = [
             f"    Basis: {t['n']} historical observations ({horizon}-day horizon)",
             f"    Win rate:        {wr*100:.1f}%",
@@ -313,17 +317,33 @@ def build_email(fg_value: float,
         lines = [f"    {'Year':<6} {'N':>5} {'WR-5d':>8} {'Mean-5d':>10}"]
         lines.append("    " + "-" * 35)
         for yr, s in sorted(t["year_by_year"].items()):
+            if s["n"] < 15:
+                continue
             lines.append(f"    {yr:<6} {s['n']:>5} {s['wr']:>7.1f}%  {s['mu']:>+9.3f}%")
         return "\n".join(lines) + "\n"
 
-    # Backtest entry signal check
-    backtest_mom = 0.2
-    backtest_vel = 0.15
-    backtest_signal = (momentum >= backtest_mom and velocity >= backtest_vel)
-    backtest_status = "YES" if backtest_signal else "NO"
+    backtest_signal = (momentum >= 0.2 and velocity >= 0.15)
 
-    # Tight signal check (from analysis: mom>=2.0, vel>=1.0 is the best Sharpe config)
-    tight_signal = (momentum >= 2.0 and velocity >= 1.0)
+    if not analysis_ok:
+        stats_section = "  Signal analysis unavailable -- check logs.\n"
+    else:
+        stats_section = f"""\
+HISTORICAL PERFORMANCE  (2011-2026, most specific matching conditions)
+
+{fmt_tier(primary)}
+{'=' * 65}
+
+POSITION SIZING  (Half-Kelly, 5-day horizon)
+
+{fmt_position(primary, horizon=5)}  NOTE: Kelly assumes the historical sample is representative of future
+  outcomes. Use half-Kelly (already applied) as the conservative estimate.
+  Size further by your overall risk budget.
+
+{'=' * 65}
+
+YEAR-BY-YEAR BREAKDOWN (5d, years with n>=15)
+
+{fmt_year_by_year(primary)}"""
 
     body = f"""\
 FEAR & GREED INDEX  --  DAILY SIGNAL REPORT
@@ -337,45 +357,17 @@ CURRENT CONDITIONS
   Momentum:    {momentum:+.3f}  (current FG vs {LOOKBACK}-day rolling avg)
   Velocity:    {velocity:+.3f}  ({LOOKBACK}-day avg of daily FG changes)
 
-  Signal:      {signal}
-
-  Backtest entry (mom>={backtest_mom}, vel>={backtest_vel}):  {backtest_status}
-  High-conviction (mom>=2.0, vel>=1.0):            {"YES" if tight_signal else "NO"}
-
-{'=' * 65}
-
-HISTORICAL PERFORMANCE  (2011-2026, similar conditions)
-
-  TIER 1 -- {zone_name} zone ({zlo}-{zhi}):
-{fmt_tier(analysis['tier1'])}
-  TIER 2 -- Same zone + momentum >= {momentum:+.2f}:
-{fmt_tier(analysis['tier2'])}
-  TIER 3 -- Same zone + momentum >= {momentum:+.2f} + velocity >= {velocity:+.2f}:
-{fmt_tier(analysis['tier3'])}
-  EXACT BIN -- FG {int(fg_value//10)*10}-{int(fg_value//10)*10+10}, mom>={momentum:+.2f}, vel>={velocity:+.2f}:
-{fmt_tier(analysis['exact_bin'])}
-{'=' * 65}
-
-POSITION SIZING  (Half-Kelly, 5-day horizon, most specific available tier)
-
-{fmt_position(primary, horizon=5)}
-  NOTE: Kelly assumes the historical sample is representative of future
-  outcomes. Use half-Kelly (already applied) as the conservative estimate.
-  Size further by your overall risk budget.
+  Signal:             {signal}
+  Backtest entry:     {"YES" if backtest_signal else "NO"}  (mom>=0.2, vel>=0.15)
+  High-conviction:    {"YES" if signal == "STRONG BUY" else "NO"}  (mom>=2.0, vel>=1.0)
 
 {'=' * 65}
 
-YEAR-BY-YEAR BREAKDOWN (5d, most specific tier)
-
-{fmt_year_by_year(primary)}
-{'=' * 65}
+{stats_section}{'=' * 65}
 
 F&G SCALE REFERENCE
-  0-25   Extreme Fear
-  26-45  Fear
-  46-55  Neutral
-  56-75  Greed
-  76-100 Extreme Greed
+  0-25   Extreme Fear  |  26-45  Fear  |  46-55  Neutral
+  56-75  Greed         |  76-100 Extreme Greed
 """
 
     msg = EmailMessage()
@@ -425,9 +417,9 @@ def main() -> None:
     fg_value, description, last_update = fetch_fgi()
     print(f"FGI: {fg_value} ({description}), last updated {last_update}")
 
-    # Build the stats dataset (downloads SPY once, ~2s)
     momentum = velocity = None
     analysis = {"tier1": None, "tier2": None, "tier3": None, "exact_bin": None}
+    analysis_ok = False
 
     try:
         print("Loading FG history and downloading SPY for signal analysis ...")
@@ -441,24 +433,25 @@ def main() -> None:
                       .reset_index(drop=True))
 
         # Compute today's momentum and velocity from the last LOOKBACK days
-        recent = fg_history["fg"].iloc[-10:]   # plenty of buffer
+        recent = fg_history["fg"].iloc[-10:]
         momentum = float(recent.iloc[-1] - recent.rolling(LOOKBACK, min_periods=1).mean().iloc[-1])
         velocity = float(recent.diff().fillna(0).rolling(LOOKBACK, min_periods=1).mean().iloc[-1])
         print(f"Signals -- momentum: {momentum:+.3f}, velocity: {velocity:+.3f}")
 
         data = build_stats_dataset(fg_history)
         analysis = analyse_conditions(data, fg_value, momentum, velocity)
+        analysis_ok = True
         print("Signal analysis complete.")
 
     except Exception as exc:
-        print(f"Signal analysis failed (email will still send without it): {exc}")
-        if momentum is None:
-            momentum = 0.0
-        if velocity is None:
-            velocity = 0.0
+        print(f"Signal analysis failed: {exc}")
+
+    if momentum is None or velocity is None:
+        print("Cannot compute signals -- skipping email.")
+        return
 
     msg = build_email(fg_value, description, last_update,
-                      momentum, velocity, analysis)
+                      momentum, velocity, analysis, analysis_ok=analysis_ok)
     send_email(msg)
     print(f"Email sent to {RECIPIENT}.")
 
