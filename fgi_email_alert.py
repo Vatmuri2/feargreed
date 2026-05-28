@@ -87,11 +87,13 @@ def load_fg_history() -> pd.DataFrame:
     return combined.dropna(subset=["fg"])
 
 
-def build_stats_dataset(fg_df: pd.DataFrame) -> pd.DataFrame:
+def build_stats_dataset(fg_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Load or download SPY, merge with FG history, compute momentum/velocity and
-    forward returns for every trading day. Returns the merged DataFrame.
-    SPY data is cached as a dated parquet; files older than 3 days are removed.
+    Load or download SPY, merge with FG history, compute momentum/velocity,
+    market-structure features, and forward returns for every trading day.
+    Returns (analysis_df, raw_spy_df). raw_spy_df retains all SPY rows so
+    the caller can derive live market conditions for today.
+    SPY data is cached as a dated CSV; files older than 3 days are removed.
     """
     today = datetime.date.today()
     cache_path = BASE_DIR / "datasets" / f"spy_{today.isoformat()}.csv"
@@ -120,6 +122,8 @@ def build_stats_dataset(fg_df: pd.DataFrame) -> pd.DataFrame:
         spy.to_csv(cache_path, index=False)
         print("SPY downloaded and cached.")
 
+    spy_raw = spy.copy()
+
     data = spy.merge(fg_df, on="Date", how="left")
     data["fg"] = data["fg"].ffill()
     data = data.dropna(subset=["fg"]).reset_index(drop=True)
@@ -130,13 +134,77 @@ def build_stats_dataset(fg_df: pd.DataFrame) -> pd.DataFrame:
     data["fg_velocity"] = (data["fg"].diff().fillna(0)
                            .rolling(LOOKBACK, min_periods=1).mean())
 
+    # Market-structure features -------------------------------------------------
+    daily_ret = data["Close"].pct_change()
+
+    # Consecutive red (non-positive) SPY days BEFORE each row
+    # Build iteratively, then shift so each row reflects the streak ending yesterday.
+    consec: list[int] = []
+    count = 0
+    for r in daily_ret:
+        if pd.isna(r) or r > 0:
+            count = 0
+        else:
+            count += 1
+        consec.append(count)
+    data["consec_red_before"] = (pd.Series(consec, index=data.index)
+                                 .shift(1).fillna(0).astype(int))
+
+    # 5-day SPY return ending yesterday (negative = recent pullback)
+    data["spy_5d_ret_prior"] = data["Close"].pct_change(5).shift(1) * 100
+
+    # SPY above 200-day MA (structural bull/bear regime)
+    data["spy_above_200ma"] = (data["Close"]
+                               > data["Close"].rolling(200, min_periods=100).mean())
+
     # Forward returns
     for d in FWD_DAYS:
         data[f"fwd_{d}d"] = data["Close"].pct_change(d).shift(-d) * 100
 
     # Drop rows where the longest horizon is still NaN
     data = data.dropna(subset=[f"fwd_{FWD_DAYS[-1]}d"]).reset_index(drop=True)
-    return data
+    return data, spy_raw
+
+
+def compute_current_spy_conditions(spy_raw: pd.DataFrame) -> dict:
+    """
+    Derive today's live market-structure conditions from the raw SPY price series.
+    Uses the last confirmed close (index -2 when today's close is present, or -1
+    when it is not yet available) to avoid look-ahead.
+    Returns: spy_5d_ret, consec_red_days, spy_above_200ma.
+    """
+    closes = spy_raw["Close"].dropna().values
+    if len(closes) < 10:
+        return {"spy_5d_ret": float("nan"), "consec_red_days": 0, "spy_above_200ma": True}
+
+    # Use the last 2 closes to decide whether today's close is settled.
+    # yfinance returns today if the session is over; treat it as available.
+    # "yesterday" = closes[-2], "today" = closes[-1].
+    daily_rets = np.diff(closes) / closes[:-1]   # len = n-1
+
+    # Consecutive red days ending yesterday (exclude today's intraday move)
+    consec_red = 0
+    for r in reversed(daily_rets[:-1]):   # daily_rets[:-1] ends at yesterday's return
+        if r <= 0:
+            consec_red += 1
+        else:
+            break
+
+    # 5-day return ending yesterday
+    spy_5d_ret = float((closes[-2] / closes[-7] - 1) * 100) if len(closes) >= 7 else float("nan")
+
+    # SPY above 200-day MA as of yesterday
+    if len(closes) >= 201:
+        ma200 = float(np.mean(closes[-201:-1]))
+        spy_above_200ma = bool(closes[-2] > ma200)
+    else:
+        spy_above_200ma = True
+
+    return {
+        "spy_5d_ret":      spy_5d_ret,
+        "consec_red_days": consec_red,
+        "spy_above_200ma": spy_above_200ma,
+    }
 
 
 # ── Statistics helpers ────────────────────────────────────────────────────────
@@ -198,26 +266,34 @@ def _tier_stats(subset: pd.DataFrame, label: str) -> dict | None:
 def analyse_conditions(data: pd.DataFrame,
                        current_fg: float,
                        momentum: float,
-                       velocity: float) -> dict:
+                       velocity: float,
+                       spy_conds: dict | None = None) -> dict:
     """
-    Return three tiers of historical stats for today's conditions:
+    Return historical stats for today's conditions across two groups of tiers:
+
+    FG signal tiers (existing):
       tier1 -- same FG zone only
       tier2 -- zone + momentum >= today's level
       tier3 -- zone + momentum >= today's level + velocity >= today's level
-    Also returns the best matching condition from the grid search.
+      exact_bin -- tightest 10-pt FG bin + both signal filters
+
+    Market-structure tiers (new, conditioned on SPY data):
+      trend   -- zone + same 200-day MA regime (bull vs bear)
+      pullback -- zone + SPY 5d prior return < 0 (bought into weakness)
+      redstreak -- zone + consec red days >= today's streak
+      composite -- zone + all three market conditions match
     """
     _, zlo, zhi = get_zone(current_fg)
+    zone_name, _, _ = get_zone(current_fg)
     zone_data = data[(data["fg"] >= zlo) & (data["fg"] <= zhi)]
 
     mom_data  = zone_data[zone_data["fg_momentum"] >= momentum]
     full_data = mom_data[mom_data["fg_velocity"]   >= velocity]
 
-    zone_name, _, _ = get_zone(current_fg)
     t1 = _tier_stats(zone_data, f"{zone_name} zone only")
     t2 = _tier_stats(mom_data,  f"+ momentum >= {momentum:+.2f}")
     t3 = _tier_stats(full_data, f"+ velocity >= {velocity:+.2f}")
 
-    # Best historical analog: closest FG 10-pt bin with cleanest stats
     fg_lo10 = int(current_fg // 10) * 10
     fg_hi10 = fg_lo10 + 10
     bin_data = data[(data["fg"] >= fg_lo10) & (data["fg"] <= fg_hi10)
@@ -226,7 +302,51 @@ def analyse_conditions(data: pd.DataFrame,
     t_bin = _tier_stats(bin_data,
                         f"FG {fg_lo10}-{fg_hi10}, mom>={momentum:+.2f}, vel>={velocity:+.2f}")
 
-    return {"tier1": t1, "tier2": t2, "tier3": t3, "exact_bin": t_bin}
+    # Market-structure tiers
+    t_trend = t_pullback = t_redstreak = t_composite = None
+    if spy_conds is not None and "spy_above_200ma" in data.columns:
+        above_200   = spy_conds["spy_above_200ma"]
+        spy_5d      = spy_conds["spy_5d_ret"]
+        consec_red  = spy_conds["consec_red_days"]
+
+        regime_label = "above" if above_200 else "below"
+        trend_data = zone_data[zone_data["spy_above_200ma"] == above_200]
+        t_trend = _tier_stats(trend_data,
+                              f"{zone_name} + SPY {regime_label} 200dMA")
+
+        if not pd.isna(spy_5d) and spy_5d < 0:
+            pb_data = zone_data[zone_data["spy_5d_ret_prior"] < 0]
+            t_pullback = _tier_stats(pb_data,
+                                     f"{zone_name} + SPY 5d ret < 0 (pullback)")
+        else:
+            pb_data = zone_data[zone_data["spy_5d_ret_prior"] >= 0]
+            t_pullback = _tier_stats(pb_data,
+                                     f"{zone_name} + SPY 5d ret >= 0 (no pullback)")
+
+        if consec_red >= 1:
+            rs_data = zone_data[zone_data["consec_red_before"] >= consec_red]
+            t_redstreak = _tier_stats(rs_data,
+                                      f"{zone_name} + >= {consec_red} consec red days")
+        else:
+            # no red streak today -- show what happens when entering on a green day
+            rs_data = zone_data[zone_data["consec_red_before"] == 0]
+            t_redstreak = _tier_stats(rs_data,
+                                      f"{zone_name} + 0 consec red days (green entry)")
+
+        # Composite: all three market conditions aligned
+        comp = trend_data.copy()
+        if not pd.isna(spy_5d):
+            comp = comp[comp["spy_5d_ret_prior"] < 0] if spy_5d < 0 else comp[comp["spy_5d_ret_prior"] >= 0]
+        if consec_red >= 1:
+            comp = comp[comp["consec_red_before"] >= consec_red]
+        t_composite = _tier_stats(comp,
+                                  f"{zone_name} + regime + {'pullback' if spy_5d < 0 else 'no pullback'} + {consec_red}d red")
+
+    return {
+        "tier1": t1, "tier2": t2, "tier3": t3, "exact_bin": t_bin,
+        "trend": t_trend, "pullback": t_pullback,
+        "redstreak": t_redstreak, "composite": t_composite,
+    }
 
 
 # ── Signal label ─────────────────────────────────────────────────────────────
@@ -259,7 +379,8 @@ def build_email(fg_value: float,
                 momentum: float,
                 velocity: float,
                 analysis: dict,
-                analysis_ok: bool = True) -> EmailMessage:
+                analysis_ok: bool = True,
+                spy_conds: dict | None = None) -> EmailMessage:
 
     zone_name, zlo, zhi = get_zone(fg_value)
     today  = datetime.date.today().strftime("%B %d, %Y")
@@ -324,16 +445,49 @@ def build_email(fg_value: float,
 
     backtest_signal = (momentum >= 0.2 and velocity >= 0.15)
 
+    # Format SPY condition summary line for CURRENT CONDITIONS block
+    if spy_conds is not None:
+        regime_str = "Above" if spy_conds["spy_above_200ma"] else "Below"
+        spy_5d_val = spy_conds["spy_5d_ret"]
+        spy_5d_str = f"{spy_5d_val:+.2f}%" if not pd.isna(spy_5d_val) else "n/a"
+        spy_line = (
+            f"  SPY 5d prior ret: {spy_5d_str}  |  "
+            f"Consec red days: {spy_conds['consec_red_days']}  |  "
+            f"200dMA regime: {regime_str}"
+        )
+    else:
+        spy_line = "  SPY conditions: unavailable"
+
     if not analysis_ok:
         stats_section = "  Signal analysis unavailable -- check logs.\n"
     else:
+        # Market-context section: composite is most informative; fall back through tiers
+        mkt_primary = (analysis["composite"] or analysis["redstreak"]
+                       or analysis["pullback"] or analysis["trend"])
+
+        mkt_section = f"""\
+MARKET CONTEXT ANALYSIS  (SPY-conditioned, same FG zone)
+
+  200dMA regime (bull vs bear market):
+{fmt_tier(analysis["trend"])}
+  Recent pullback (SPY 5d prior return):
+{fmt_tier(analysis["pullback"])}
+  Consecutive red-day streak:
+{fmt_tier(analysis["redstreak"])}
+  Composite (all market conditions aligned):
+{fmt_tier(analysis["composite"])}"""
+
         stats_section = f"""\
-HISTORICAL PERFORMANCE  (2011-2026, most specific matching conditions)
+HISTORICAL PERFORMANCE  (2011-2026, most specific FG+signal conditions)
 
 {fmt_tier(primary)}
 {'=' * 65}
 
+{mkt_section}
+{'=' * 65}
+
 POSITION SIZING  (Half-Kelly, 5-day horizon)
+  Using most specific FG+signal tier as basis.
 
 {fmt_position(primary, horizon=5)}  NOTE: Kelly assumes the historical sample is representative of future
   outcomes. Use half-Kelly (already applied) as the conservative estimate.
@@ -356,6 +510,7 @@ CURRENT CONDITIONS
   Zone range:  {zlo}-{zhi}
   Momentum:    {momentum:+.3f}  (current FG vs {LOOKBACK}-day rolling avg)
   Velocity:    {velocity:+.3f}  ({LOOKBACK}-day avg of daily FG changes)
+{spy_line}
 
   Signal:             {signal}
   Backtest entry:     {"YES" if backtest_signal else "NO"}  (mom>=0.2, vel>=0.15)
@@ -418,7 +573,11 @@ def main() -> None:
     print(f"FGI: {fg_value} ({description}), last updated {last_update}")
 
     momentum = velocity = None
-    analysis = {"tier1": None, "tier2": None, "tier3": None, "exact_bin": None}
+    analysis = {
+        "tier1": None, "tier2": None, "tier3": None, "exact_bin": None,
+        "trend": None, "pullback": None, "redstreak": None, "composite": None,
+    }
+    spy_conds: dict | None = None
     analysis_ok = False
 
     try:
@@ -438,8 +597,13 @@ def main() -> None:
         velocity = float(recent.diff().fillna(0).rolling(LOOKBACK, min_periods=1).mean().iloc[-1])
         print(f"Signals -- momentum: {momentum:+.3f}, velocity: {velocity:+.3f}")
 
-        data = build_stats_dataset(fg_history)
-        analysis = analyse_conditions(data, fg_value, momentum, velocity)
+        data, spy_raw = build_stats_dataset(fg_history)
+        spy_conds = compute_current_spy_conditions(spy_raw)
+        print(f"SPY conditions -- 5d ret: {spy_conds['spy_5d_ret']:+.2f}%,"
+              f" consec red: {spy_conds['consec_red_days']},"
+              f" above 200dMA: {spy_conds['spy_above_200ma']}")
+
+        analysis = analyse_conditions(data, fg_value, momentum, velocity, spy_conds)
         analysis_ok = True
         print("Signal analysis complete.")
 
@@ -451,7 +615,8 @@ def main() -> None:
         return
 
     msg = build_email(fg_value, description, last_update,
-                      momentum, velocity, analysis, analysis_ok=analysis_ok)
+                      momentum, velocity, analysis, analysis_ok=analysis_ok,
+                      spy_conds=spy_conds)
     send_email(msg)
     print(f"Email sent to {RECIPIENT}.")
 
