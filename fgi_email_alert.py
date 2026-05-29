@@ -32,7 +32,7 @@ RECIPIENTS = [
     "Vikramatmuri01@gmail.com",
     "Pranavswami02@gmail.com",
     "shekar111213@gmail.com",
-    "vivch@gmail.com",
+    "vivch7@gmail.com",
     "vatmuri04@gmail.com",
 ]
 SENDER_EMAIL     = os.environ["FGI_SENDER_EMAIL"]
