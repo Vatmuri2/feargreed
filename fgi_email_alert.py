@@ -28,7 +28,13 @@ import yfinance as yf
 from scipy import stats as scipy_stats
 
 # ── Config ───────────────────────────────────────────────────────────────────
-RECIPIENT        = "Vikramatmuri01@gmail.com"
+RECIPIENTS = [
+    "Vikramatmuri01@gmail.com",
+    "Pranavswami02@gmail.com",
+    "shekar111213@gmail.com",
+    "vivch@gmail.com",
+    "vatmuri04@gmail.com",
+]
 SENDER_EMAIL     = os.environ["FGI_SENDER_EMAIL"]
 SENDER_PASSWORD  = os.environ["FGI_SENDER_PASSWORD"]
 
@@ -528,7 +534,7 @@ F&G SCALE REFERENCE
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"]    = SENDER_EMAIL
-    msg["To"]      = RECIPIENT
+    msg["To"]      = ", ".join(RECIPIENTS)
     msg.set_content(body)
     return msg
 
@@ -618,7 +624,7 @@ def main() -> None:
                       momentum, velocity, analysis, analysis_ok=analysis_ok,
                       spy_conds=spy_conds)
     send_email(msg)
-    print(f"Email sent to {RECIPIENT}.")
+    print(f"Email sent to {', '.join(RECIPIENTS)}.")
 
 
 if __name__ == "__main__":
