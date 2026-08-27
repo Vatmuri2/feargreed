@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-08-26 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-08-27 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -10,14 +10,14 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Value | **$25,258.57** |
-| Buying Power | $101,034.28 |
-| Current FGI | 56.66 |
+| Portfolio Value | **$25,322.54** |
+| Buying Power | $98,526.95 |
+| Current FGI | 54.0 |
 | Position | FLAT |
 | Total P&L | **$+995** |
 | Win Rate | 50% (1W / 1L) |
 | Total Round Trips | 2 |
-| Last Signal | NO_ACTION @ 2026-08-26 09:35 |
+| Last Signal | NO_ACTION @ 2026-08-27 09:35 |
 
 <details>
 <summary>Trade History (2 trades)</summary>
@@ -34,11 +34,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 08-27 09:35 | NO_ACTION | $767.41 | 54.0 | -1.57 | -0.22 | 0.55 | SELL incomplete - still holding 32 after 5 attempts |
 | 08-26 09:35 | NO_ACTION | $765.67 | 56.66 | 0.87 | 1.21 | 0.55 | BUY did not fill after 3 attempts |
 | 08-25 09:35 | NO_ACTION | $766.64 | 56.06 | 1.48 | -0.31 | 0.55 | Insufficient momentum/velocity for entry |
 | 08-24 09:35 | NO_ACTION | $763.34 | 54.66 | -0.24 | -0.20 | 0.55 | Insufficient momentum/velocity for entry |
 | 08-21 09:35 | NO_ACTION | $764.81 | 53.03 | -2.07 | -1.89 | 0.55 | Insufficient momentum/velocity for entry |
-| 08-20 09:35 | NO_ACTION | $766.73 | 57.0 | 0.02 | -2.35 | 0.55 | Insufficient momentum/velocity for entry |
 
 </details>
 
@@ -48,14 +48,14 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Value | **$25,888.22** |
-| Buying Power | $103,552.88 |
-| Current FGI | 55.74 |
+| Portfolio Value | **$25,886.62** |
+| Buying Power | $103,546.48 |
+| Current FGI | 58.14 |
 | Position | FLAT |
 | Total P&L | **$+302** |
 | Win Rate | 50% (2W / 2L) |
 | Total Round Trips | 4 |
-| Last Signal | NO_ACTION @ 2026-08-26 15:52 |
+| Last Signal | NO_ACTION @ 2026-08-27 15:50 |
 
 <details>
 <summary>Trade History (4 trades)</summary>
@@ -74,11 +74,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 08-27 15:50 | NO_ACTION | $770.53 | 58.14 | 0.56 | 0.97 | 0.55 | BUY did not fill after 3 attempts |
 | 08-26 15:52 | NO_ACTION | $767.11 | 55.74 | -0.87 | 0.08 | 0.55 | SELL incomplete - still holding 33 after 5 attempts |
 | 08-25 15:50 | NO_ACTION | $765.34 | 58.86 | 2.33 | 2.00 | 0.55 | BUY did not fill after 3 attempts |
 | 08-24 15:52 | NO_ACTION | $763.90 | 55.23 | 0.70 | -0.51 | 0.55 | SELL incomplete - still holding 33 after 5 attempts |
 | 08-21 15:50 | NO_ACTION | $766.56 | 55.51 | 0.46 | 0.31 | 0.55 | BUY did not fill after 3 attempts |
-| 08-20 15:50 | NO_ACTION | $763.25 | 52.86 | -1.87 | -2.49 | 0.55 | Insufficient momentum/velocity for entry |
 
 </details>
 
