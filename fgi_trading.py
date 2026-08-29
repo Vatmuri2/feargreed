@@ -29,6 +29,7 @@ import pytz
 import fear_and_greed as fg
 
 from alpaca.common.exceptions import APIError
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, StockLatestQuoteRequest
 from alpaca.data.timeframe import TimeFrame
@@ -329,6 +330,7 @@ class TradingBot:
                 timeframe=TimeFrame.Day,
                 start=start_et.astimezone(pytz.UTC),
                 end=end_et.astimezone(pytz.UTC),
+                feed=DataFeed.IEX,
             )
             bars = self.dc.get_stock_bars(req).df
             if bars.empty:
@@ -573,8 +575,13 @@ class TradingBot:
             except APIError as e:
                 code = _api_error_code(e)
                 _evt("sell.submit_error", attempt=attempt, code=code, error=str(e))
-                if code == _ERR_QTY_NON_POSITIVE:
-                    # broker says we hold nothing - treat as flat
+                if code in (_ERR_QTY_NON_POSITIVE, _ERR_POSITION_NOT_FOUND):
+                    # broker says we hold nothing - treat as flat. Falling
+                    # through to the raw market-order fallback here was
+                    # submitting a real SELL/BUY for `qty` (read at the top
+                    # of this loop iteration, already stale) against an
+                    # account the broker just told us is flat - on paper
+                    # trading that fills as an unintended short/long.
                     break
                 # Fallback: marketable order direct submit
                 try:
