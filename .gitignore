@@ -139,6 +139,10 @@ pyvenv.cfg
 get-docker.sh
 Dockerfile
 
+# Daily SPY price cache written by fgi_email_alert.py (self-pruning locally,
+# regenerable from yfinance at any time - not tracked, see CHANGES.md)
+datasets/spy_*.csv
+
 # macOS
 .DS_Store
 
