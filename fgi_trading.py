@@ -344,11 +344,19 @@ class TradingBot:
     # -------------------------------------------------------- broker truth
 
     def read_position(self) -> tuple[str, int]:
-        """Returns ('long', qty) | ('short', qty) | ('flat', 0)."""
+        """Returns ('long', qty) | ('short', qty) | ('flat', 0).
+
+        Only a 404 ("position does not exist") means flat. Any other
+        APIError (auth failure, 5xx, rate limit) is a real problem and
+        must not be silently treated as flat - doing so would make the
+        bot invisible to its own broken state."""
         try:
             pos = self.tc.get_open_position(self.cfg.symbol)
-        except APIError:
-            return "flat", 0
+        except APIError as e:
+            if e.status_code == 404:
+                return "flat", 0
+            _evt("position.read_error", status_code=e.status_code, error=str(e))
+            raise
         qty = int(float(pos.qty))
         if qty > 0:
             return "long", qty

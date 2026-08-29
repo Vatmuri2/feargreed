@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-08-28 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-08-29 13:29 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -51,14 +51,14 @@
 | Portfolio Value | **$25,858.29** |
 | Buying Power | $103,433.16 |
 | Current FGI | 54.26 |
-| Position | FLAT |
+| Position | IN POSITION |
 | Total P&L | **$+302** |
 | Win Rate | 50% (2W / 2L) |
 | Total Round Trips | 4 |
 | Last Signal | NO_ACTION @ 2026-08-28 15:52 |
 
 <details>
-<summary>Trade History (4 trades)</summary>
+<summary>Trade History (5 trades)</summary>
 
 | Buy Date | Sell Date | Buy Price | Sell Price | Qty | P&L | Return | Result |
 |----------|-----------|-----------|------------|-----|-----|--------|--------|
@@ -66,6 +66,7 @@
 | 2026-05-01 | 2026-05-04 | $720.42 | $717.38 | 68 | $-207 | -0.42% | LOSS |
 | 2026-05-05 | 2026-05-07 | $723.86 | $731.90 | 67 | $+539 | +1.11% | WIN |
 | 2026-05-27 | 2026-05-28 | $750.78 | $755.22 | 66 | $+293 | +0.59% | WIN |
+| 2026-08-27 | — | unknown (late/unlogged fill) | — | 33 | — | — | OPEN |
 
 </details>
 

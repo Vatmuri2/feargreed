@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import datetime
 import os
@@ -8,8 +9,20 @@ import matplotlib.dates as mdates
 
 LOG_BOD = 'trading_log_BOD.csv'
 LOG_EOD = 'trading_log_EOD.csv'
+STATE_BOD = 'state_BOD.json'
+STATE_EOD = 'state_EOD.json'
 README = 'README.md'
 CHART_PATH = 'assets/portfolio_chart.png'
+
+
+def load_state(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def load_log(path):
@@ -100,7 +113,7 @@ def generate_chart(bod_df, eod_df):
     return True
 
 
-def calc_stats(df, label):
+def calc_stats(df, label, state=None):
     if df.empty:
         return None
 
@@ -145,8 +158,13 @@ def calc_stats(df, label):
             'Result': 'WIN' if pnl > 0 else 'LOSS'
         })
 
-    has_open = len(buy_list) > len(sell_list)
-    if has_open:
+    # The CSV only ever gets a BOUGHT row when a limit order fills inside
+    # the bot's own polling window. A resting order that fills late (after
+    # the cycle ends) shows up as a live broker position with no matching
+    # BOUGHT row - state_*.json is the only place that position is recorded.
+    # See CHANGES.md / the 2026-08-27 EOD entry for a concrete example.
+    has_open = len(buy_list) > len(sell_list) or bool(state and state.get('entry_date'))
+    if len(buy_list) > len(sell_list):
         ob = buy_list.iloc[-1]
         trade_rows.append({
             'Buy Date': ob['Timestamp'].strftime('%Y-%m-%d'),
@@ -154,6 +172,17 @@ def calc_stats(df, label):
             'Buy Price': f"${ob['Price']:.2f}",
             'Sell Price': '—',
             'Qty': int(ob['Quantity']),
+            'PnL': '—',
+            'Return': '—',
+            'Result': 'OPEN'
+        })
+    elif state and state.get('entry_date'):
+        trade_rows.append({
+            'Buy Date': state['entry_date'],
+            'Sell Date': '—',
+            'Buy Price': 'unknown (late/unlogged fill)',
+            'Sell Price': '—',
+            'Qty': state.get('qty', 'unknown'),
             'PnL': '—',
             'Return': '—',
             'Result': 'OPEN'
@@ -263,14 +292,14 @@ def render_md(stats_list, has_chart):
 bod_df = load_log(LOG_BOD)
 eod_df = load_log(LOG_EOD)
 
-bod_stats = calc_stats(bod_df, 'BOD (Morning) Strategy')
-eod_stats = calc_stats(eod_df, 'EOD (Afternoon) Strategy')
+bod_stats = calc_stats(bod_df, 'BOD (Morning) Strategy', state=load_state(STATE_BOD))
+eod_stats = calc_stats(eod_df, 'EOD (Afternoon) Strategy', state=load_state(STATE_EOD))
 
 has_chart = generate_chart(bod_df, eod_df)
 
 md = render_md([bod_stats, eod_stats], has_chart)
 
-with open(README, 'w') as f:
+with open(README, 'w', encoding='utf-8') as f:
     f.write(md)
 
 print(f'Dashboard generated: {README}')
