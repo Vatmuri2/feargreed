@@ -56,6 +56,7 @@ _TERMINAL_ORDER_STATUSES = {
 # they are we want to surface them clearly.
 _ERR_INSUFFICIENT_BP = 40310000
 _ERR_QTY_NON_POSITIVE = 40010001
+_ERR_POSITION_NOT_FOUND = 40410000
 
 _CSV_COLUMNS = [
     "Timestamp", "Action", "Symbol", "Quantity", "Price", "FGI_Value",
@@ -346,16 +347,16 @@ class TradingBot:
     def read_position(self) -> tuple[str, int]:
         """Returns ('long', qty) | ('short', qty) | ('flat', 0).
 
-        Only a 404 ("position does not exist") means flat. Any other
-        APIError (auth failure, 5xx, rate limit) is a real problem and
-        must not be silently treated as flat - doing so would make the
-        bot invisible to its own broken state."""
+        Only the structured "position does not exist" error means flat.
+        Any other APIError (auth failure, 5xx, rate limit) is a real
+        problem and must not be silently treated as flat - doing so
+        would make the bot invisible to its own broken state."""
         try:
             pos = self.tc.get_open_position(self.cfg.symbol)
         except APIError as e:
-            if e.status_code == 404:
+            if _api_error_code(e) == _ERR_POSITION_NOT_FOUND:
                 return "flat", 0
-            _evt("position.read_error", status_code=e.status_code, error=str(e))
+            _evt("position.read_error", code=_api_error_code(e), error=str(e))
             raise
         qty = int(float(pos.qty))
         if qty > 0:
