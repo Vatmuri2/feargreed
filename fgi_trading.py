@@ -478,22 +478,28 @@ class TradingBot:
         """Buy up to target_qty using marketable limits with cancel/replace.
         Returns (action, filled_qty, avg_fill_price, error_reason).
 
-        Reconciles against live position after every attempt so partial
-        fills are accounted for and never lead to a duplicate submission
-        beyond the target."""
+        Position is read once, up front. "Remaining" is then tracked from
+        each order's own fill confirmation (total_filled), not from
+        re-reading the broker's position after every attempt - Alpaca's
+        position endpoint can lag a fill by a couple of seconds, and
+        re-deriving "remaining" from a stale read caused a second full-size
+        buy to be submitted on top of one that had already filled (seen
+        live: two 33-share BUYs 34 seconds apart on the same cycle)."""
         cfg = self.cfg
         target = self._target_buy_qty(current_price)
         if target <= 0:
             return "NO_ACTION", 0, current_price, "Insufficient cash for any shares"
 
+        side, pos_qty = self.read_position()
+        if side == "short":
+            return "NO_ACTION", 0, current_price, "Unexpected short; aborting buy"
+        already_owned = pos_qty if side == "long" else 0
+
         total_filled = 0
         total_cost = 0.0
         attempts = list(enumerate(cfg.buy_limit_multipliers, 1))
         for attempt, multiplier in attempts:
-            side, pos_qty = self.read_position()
-            if side == "short":
-                return "NO_ACTION", 0, current_price, "Unexpected short; aborting buy"
-            remaining = target - pos_qty
+            remaining = target - already_owned - total_filled
             if remaining <= 0:
                 break
 
@@ -549,21 +555,28 @@ class TradingBot:
     def execute_sell(self, current_price: float) -> tuple[str, int, float, Optional[str]]:
         """Flatten the position using close_position (market, regular hours).
 
-        Loops until live position is flat or attempts are exhausted. Never
-        submits a hard-coded qty; always reads live position first to avoid
-        oversell (40310000) and qty<=0 (40010001) errors."""
+        The starting qty is read once, up front. Whether to keep looping is
+        then decided from each order's own fill confirmation (total_sold
+        vs. that starting qty), not from re-reading the broker's position
+        after every attempt: a stale position read caused a second
+        close_position() to be submitted on top of one that had already
+        filled - on paper trading that fills as a real, unintended short
+        (seen live: SELL/SELL/BUY/BUY/SELL all filled within one cycle)."""
         cfg = self.cfg
+        side, qty = self.read_position()
+        if side == "flat":
+            return "NO_ACTION", 0, current_price, "Position already flat"
+        if side == "short":
+            _evt("sell.unexpected_short", qty=qty)
+            # close_position handles shorts too
+
+        target_qty = abs(qty)
         total_sold = 0
         proceeds = 0.0
 
         for attempt in range(1, cfg.sell_reconcile_attempts + 1):
-            side, qty = self.read_position()
-            if side == "flat":
-                break
-            if side == "short":
-                _evt("sell.unexpected_short", qty=qty)
-                # close_position handles shorts too
-            if qty == 0:
+            remaining = target_qty - total_sold
+            if remaining <= 0:
                 break
 
             self.cancel_open_orders()
@@ -571,30 +584,41 @@ class TradingBot:
             try:
                 order = self.tc.close_position(cfg.symbol)
                 _evt("sell.submitted", attempt=attempt, order_id=str(order.id),
-                     qty=qty)
+                     qty=remaining)
             except APIError as e:
                 code = _api_error_code(e)
                 _evt("sell.submit_error", attempt=attempt, code=code, error=str(e))
                 if code in (_ERR_QTY_NON_POSITIVE, _ERR_POSITION_NOT_FOUND):
                     # broker says we hold nothing - treat as flat. Falling
                     # through to the raw market-order fallback here was
-                    # submitting a real SELL/BUY for `qty` (read at the top
-                    # of this loop iteration, already stale) against an
-                    # account the broker just told us is flat - on paper
-                    # trading that fills as an unintended short/long.
+                    # submitting a real SELL/BUY against an account the
+                    # broker just told us is flat. Leave total_sold as
+                    # whatever this call actually filled - the final
+                    # read_position() below confirms flat either way.
                     break
-                # Fallback: marketable order direct submit
+                if code == _ERR_INSUFFICIENT_BP:
+                    # Every share is locked by a still-resolving order
+                    # (existing_qty == held_for_orders in the error body) -
+                    # cancel_open_orders() hasn't released the hold yet.
+                    # The raw fallback below would hit the identical lock
+                    # in the same instant; give it time to clear instead.
+                    _evt("sell.locked_retry", attempt=attempt)
+                    time.sleep(cfg.sell_reconcile_sleep)
+                    continue
+                # Fallback: marketable order direct submit, sized to what
+                # we still believe is outstanding (our own fill tally, not
+                # a fresh broker read).
                 try:
                     side_alpaca = OrderSide.SELL if qty > 0 else OrderSide.BUY
                     req = MarketOrderRequest(
                         symbol=cfg.symbol,
-                        qty=abs(qty),
+                        qty=remaining,
                         side=side_alpaca,
                         time_in_force=TimeInForce.DAY,
                     )
                     order = self.tc.submit_order(req)
                     _evt("sell.fallback_submitted", attempt=attempt,
-                         order_id=str(order.id), qty=qty)
+                         order_id=str(order.id), qty=remaining)
                 except Exception as e2:
                     _evt("sell.fallback_error", attempt=attempt, error=str(e2))
                     time.sleep(cfg.sell_reconcile_sleep)
@@ -611,7 +635,21 @@ class TradingBot:
                 proceeds += filled_qty * avg
             time.sleep(cfg.sell_reconcile_sleep)
 
+        # Our own fill tally already says we're done, but the position
+        # endpoint can still lag the last fill by a moment - give it a
+        # couple of short re-checks before believing a "still holding"
+        # result over what we just watched fill. Without this, a genuinely
+        # successful flatten gets logged as an incomplete sell (this is
+        # what produced the misleading "still holding 33" log rows even
+        # after the account had actually gone flat).
         side_after, qty_after = self.read_position()
+        settle_checks = 0
+        while (side_after != "flat" and total_sold >= target_qty
+               and settle_checks < 2):
+            time.sleep(cfg.sell_reconcile_sleep)
+            side_after, qty_after = self.read_position()
+            settle_checks += 1
+
         if side_after != "flat":
             return ("NO_ACTION", total_sold, current_price,
                     f"SELL incomplete - still holding {qty_after} after "
