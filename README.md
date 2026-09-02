@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-09-01 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-09-02 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -12,12 +12,12 @@
 |--------|-------|
 | Portfolio Value | **$25,322.10** |
 | Buying Power | $101,288.40 |
-| Current FGI | 47.51 |
+| Current FGI | 30.86 |
 | Position | FLAT |
 | Total P&L | **$+995** |
 | Win Rate | 50% (1W / 1L) |
 | Total Round Trips | 2 |
-| Last Signal | NO_ACTION @ 2026-09-01 09:35 |
+| Last Signal | NO_ACTION @ 2026-09-02 09:35 |
 
 <details>
 <summary>Trade History (2 trades)</summary>
@@ -34,11 +34,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 09-02 09:35 | NO_ACTION | $762.27 | 30.86 | -13.41 | -8.18 | 0.0718 | Insufficient momentum/velocity for entry |
 | 09-01 09:35 | NO_ACTION | $761.95 | 47.51 | -4.94 | -2.16 | 0.0713 | Insufficient momentum/velocity for entry |
 | 08-31 09:35 | NO_ACTION | $766.17 | 54.43 | -0.18 | -0.74 | 0.0934 | Insufficient momentum/velocity for entry |
 | 08-28 09:35 | NO_ACTION | $772.07 | 55.4 | 0.05 | -0.22 | 0.55 | Insufficient momentum/velocity for entry |
 | 08-27 09:35 | NO_ACTION | $767.41 | 54.0 | -1.57 | -0.22 | 0.55 | SELL incomplete - still holding 32 after 5 attempts |
-| 08-26 09:35 | NO_ACTION | $765.67 | 56.66 | 0.87 | 1.21 | 0.55 | BUY did not fill after 3 attempts |
 
 </details>
 
@@ -50,12 +50,12 @@
 |--------|-------|
 | Portfolio Value | **$25,856.69** |
 | Buying Power | $103,426.76 |
-| Current FGI | 44.23 |
+| Current FGI | 33.77 |
 | Position | FLAT |
 | Total P&L | **$+302** |
 | Win Rate | 50% (2W / 2L) |
 | Total Round Trips | 4 |
-| Last Signal | NO_ACTION @ 2026-09-01 15:50 |
+| Last Signal | NO_ACTION @ 2026-09-02 15:50 |
 
 <details>
 <summary>Trade History (4 trades)</summary>
@@ -74,11 +74,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 09-02 15:50 | NO_ACTION | $765.32 | 33.77 | -8.81 | -6.83 | 0.0742 | Insufficient momentum/velocity for entry |
 | 09-01 15:50 | NO_ACTION | $761.07 | 44.23 | -5.18 | -4.64 | 0.0723 | Insufficient momentum/velocity for entry |
 | 08-31 15:50 | NO_ACTION | $767.39 | 49.74 | -4.31 | -2.00 | 0.0931 | Insufficient momentum/velocity for entry |
 | 08-28 15:52 | NO_ACTION | $769.53 | 54.26 | -1.79 | -1.53 | 0.55 | SELL incomplete - still holding 33 after 5 attempts |
 | 08-27 15:50 | NO_ACTION | $770.53 | 58.14 | 0.56 | 0.97 | 0.55 | BUY did not fill after 3 attempts |
-| 08-26 15:52 | NO_ACTION | $767.11 | 55.74 | -0.87 | 0.08 | 0.55 | SELL incomplete - still holding 33 after 5 attempts |
 
 </details>
 
