@@ -367,8 +367,20 @@ class TradingBot:
             return "short", qty
         return "flat", 0
 
-    def cancel_open_orders(self, timeout: int = 10) -> None:
-        """Cancel every open order for the symbol and confirm cancellation."""
+    def cancel_open_orders(self, timeout: int = 10, extra_order_ids=None) -> None:
+        """Cancel every open order for the symbol and confirm cancellation.
+
+        `extra_order_ids` are cancelled by ID directly, in addition to
+        whatever get_orders(status=OPEN) returns. This matters because a
+        just-submitted order can still be missing from that listing for a
+        window after submission (observed live: a PENDING_NEW order was
+        absent from this query for the full 30s of the next attempt's
+        fill-wait, so it was never cancelled and was still resting when a
+        second full-size order went out on top of it - Alpaca's docs say a
+        cancel is only rejected once an order reaches a terminal status
+        like filled/canceled/expired, so cancelling an ID we already hold
+        is always safe to attempt regardless of what the listing shows)."""
+        ids = set(extra_order_ids or [])
         try:
             open_orders = self.tc.get_orders(
                 GetOrdersRequest(
@@ -376,11 +388,12 @@ class TradingBot:
                     symbols=[self.cfg.symbol],
                 )
             )
+            ids.update(o.id for o in open_orders)
         except Exception as e:
             _evt("cancel.list_error", error=str(e))
-            return
+            if not ids:
+                return
 
-        ids = [o.id for o in open_orders]
         for oid in ids:
             try:
                 self.tc.cancel_order_by_id(oid)
@@ -391,12 +404,12 @@ class TradingBot:
         # Wait for cancels to be acknowledged.
         deadline = time.time() + timeout
         while ids and time.time() < deadline:
-            still_open = []
+            still_open = set()
             for oid in ids:
                 try:
                     order = self.tc.get_order_by_id(oid)
                     if order.status not in _TERMINAL_ORDER_STATUSES:
-                        still_open.append(oid)
+                        still_open.add(oid)
                 except Exception:
                     pass
             ids = still_open
@@ -497,13 +510,15 @@ class TradingBot:
 
         total_filled = 0
         total_cost = 0.0
+        pending_order_id = None  # unresolved order from the previous attempt, if any
         attempts = list(enumerate(cfg.buy_limit_multipliers, 1))
         for attempt, multiplier in attempts:
             remaining = target - already_owned - total_filled
             if remaining <= 0:
                 break
 
-            self.cancel_open_orders()
+            self.cancel_open_orders(
+                extra_order_ids=[pending_order_id] if pending_order_id else None)
 
             limit_price = round(current_price * multiplier, 2)
             # Defensive: shrink qty if cash actually can't support it
@@ -529,6 +544,7 @@ class TradingBot:
             except APIError as e:
                 _evt("buy.submit_error", attempt=attempt, code=_api_error_code(e),
                      error=str(e))
+                pending_order_id = None
                 continue
 
             filled = self._wait_for_fill(submitted.id, cfg.fill_poll_seconds)
@@ -540,8 +556,17 @@ class TradingBot:
             if filled_qty > 0:
                 total_filled += filled_qty
                 total_cost += filled_qty * avg
+            # This order may still be resting (e.g. PENDING_NEW) and briefly
+            # missing from the open-orders listing cancel_open_orders()
+            # queries - hand its ID through explicitly so it gets cancelled
+            # by ID regardless of whether that listing has caught up yet.
+            pending_order_id = (
+                submitted.id if not filled or filled.status not in _TERMINAL_ORDER_STATUSES
+                else None
+            )
             # cancel any remaining unfilled remainder before next attempt
-            self.cancel_open_orders()
+            self.cancel_open_orders(
+                extra_order_ids=[pending_order_id] if pending_order_id else None)
 
         if total_filled > 0:
             avg_price = total_cost / total_filled
@@ -573,13 +598,15 @@ class TradingBot:
         target_qty = abs(qty)
         total_sold = 0
         proceeds = 0.0
+        pending_order_id = None  # unresolved order from the previous attempt, if any
 
         for attempt in range(1, cfg.sell_reconcile_attempts + 1):
             remaining = target_qty - total_sold
             if remaining <= 0:
                 break
 
-            self.cancel_open_orders()
+            self.cancel_open_orders(
+                extra_order_ids=[pending_order_id] if pending_order_id else None)
 
             try:
                 order = self.tc.close_position(cfg.symbol)
@@ -633,6 +660,18 @@ class TradingBot:
             if filled_qty > 0:
                 total_sold += filled_qty
                 proceeds += filled_qty * avg
+            # Same reasoning as execute_buy: this order may still be
+            # resting and briefly missing from cancel_open_orders()'s
+            # open-orders listing - hand its ID through explicitly, both
+            # now and (via pending_order_id) before the next attempt. This
+            # matters most on the *last* attempt: with no next iteration
+            # to retry the cancel, this is the only chance to clear it.
+            pending_order_id = (
+                order.id if not filled or filled.status not in _TERMINAL_ORDER_STATUSES
+                else None
+            )
+            if pending_order_id:
+                self.cancel_open_orders(extra_order_ids=[pending_order_id])
             time.sleep(cfg.sell_reconcile_sleep)
 
         # Our own fill tally already says we're done, but the position
