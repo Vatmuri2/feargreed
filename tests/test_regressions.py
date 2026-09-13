@@ -280,13 +280,29 @@ def _make_bot_with_fakes(tmpdir, position_qty=0) -> tuple[TradingBot, FakeTradin
         col = "fear_greed" if "fear_greed" in df.columns else (
             "Fear Greed" if "Fear Greed" in df.columns else "Index"
         )
-        # Append today's row with a stable benign value
-        if not (df["Date"] == today_et).any():
-            row = {"Date": today_et, col: 50.0}
+        # Freeze the lookback window (+ today) to one flat, neutral value
+        # so momentum/velocity are always exactly 0 - deterministic, no
+        # accidental BUY signal - regardless of what the real,
+        # continuously-updated dataset file's tail happens to look like on
+        # whatever day this suite runs. Previously this only stubbed
+        # "today" on top of the live file's real recent values, so as
+        # production FGI data drifted over time (e.g. a sharp real decline
+        # into September 2026), the gap against the stubbed 50.0 grew
+        # large enough to spuriously trip a BUY in run_cycle()-based tests
+        # that explicitly don't want one.
+        NEUTRAL = 50.0
+        lookback = 3
+        if len(df) >= lookback:
+            df.loc[df.index[-lookback:], col] = NEUTRAL
+        mask_today = df["Date"] == today_et
+        if mask_today.any():
+            df.loc[mask_today, col] = NEUTRAL
+        else:
+            row = {"Date": today_et, col: NEUTRAL}
             if "rating" in df.columns:
                 row["rating"] = "neutral"
             df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-        return df, 50.0, col, "fresh"
+        return df, NEUTRAL, col, "fresh"
 
     bot.fgi_fetcher = _fake_fetch
     return bot, tc
