@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-10-05 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-10-06 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -10,22 +10,23 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Value | **$24,773.37** |
-| Buying Power | $41,758.61 |
-| Current FGI | 39.8 |
-| Position | FLAT |
+| Portfolio Value | **$25,240.22** |
+| Buying Power | $43,065.78 |
+| Current FGI | 43.71 |
+| Position | IN POSITION |
 | Total P&L | **$+995** |
 | Win Rate | 50% (1W / 1L) |
 | Total Round Trips | 2 |
-| Last Signal | NO_ACTION @ 2026-10-05 09:36 |
+| Last Signal | NO_ACTION @ 2026-10-06 09:35 |
 
 <details>
-<summary>Trade History (2 trades)</summary>
+<summary>Trade History (3 trades)</summary>
 
 | Buy Date | Sell Date | Buy Price | Sell Price | Qty | P&L | Return | Result |
 |----------|-----------|-----------|------------|-----|-----|--------|--------|
 | 2026-04-21 | 2026-04-22 | $710.20 | $709.24 | 70 | $-68 | -0.14% | LOSS |
 | 2026-05-04 | 2026-05-08 | $719.65 | $735.05 | 69 | $+1,063 | +2.14% | WIN |
+| 2026-10-05 | — | unknown (late/unlogged fill) | — | 62 | — | — | OPEN |
 
 </details>
 
@@ -34,11 +35,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 10-06 09:35 | NO_ACTION | $778.15 | 43.71 | 6.82 | 4.59 | 0.1041 | Holding position - indicators still favorable (1/8 days) |
 | 10-05 09:36 | NO_ACTION | $770.80 | 39.8 | 7.50 | 3.70 | 0.1028 | BUY did not fill after 3 attempts |
 | 10-02 09:35 | NO_ACTION | $770.74 | 27.17 | -1.43 | -2.34 | 0.1049 | Insufficient momentum/velocity for entry |
 | 10-01 09:35 | NO_ACTION | $764.75 | 29.94 | -1.00 | -1.33 | 0.1075 | Insufficient momentum/velocity for entry |
 | 09-30 09:35 | NO_ACTION | $766.74 | 28.69 | -3.59 | -2.34 | 0.1081 | Insufficient momentum/velocity for entry |
-| 09-29 09:35 | NO_ACTION | $765.87 | 34.2 | -0.42 | -0.14 | 0.1103 | SELL incomplete - still holding 64 after 5 attempts |
 
 </details>
 
@@ -48,17 +49,17 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Value | **$25,785.83** |
-| Buying Power | $42,725.30 |
-| Current FGI | 43.69 |
-| Position | FLAT |
+| Portfolio Value | **$26,093.92** |
+| Buying Power | $43,587.94 |
+| Current FGI | 47.71 |
+| Position | IN POSITION |
 | Total P&L | **$+302** |
 | Win Rate | 50% (2W / 2L) |
 | Total Round Trips | 4 |
-| Last Signal | NO_ACTION @ 2026-10-05 15:51 |
+| Last Signal | NO_ACTION @ 2026-10-06 15:50 |
 
 <details>
-<summary>Trade History (4 trades)</summary>
+<summary>Trade History (5 trades)</summary>
 
 | Buy Date | Sell Date | Buy Price | Sell Price | Qty | P&L | Return | Result |
 |----------|-----------|-----------|------------|-----|-----|--------|--------|
@@ -66,6 +67,7 @@
 | 2026-05-01 | 2026-05-04 | $720.42 | $717.38 | 68 | $-207 | -0.42% | LOSS |
 | 2026-05-05 | 2026-05-07 | $723.86 | $731.90 | 67 | $+539 | +1.11% | WIN |
 | 2026-05-27 | 2026-05-28 | $750.78 | $755.22 | 66 | $+293 | +0.59% | WIN |
+| 2026-10-05 | — | unknown (late/unlogged fill) | — | 65 | — | — | OPEN |
 
 </details>
 
@@ -74,11 +76,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 10-06 15:50 | NO_ACTION | $779.33 | 47.71 | 6.81 | 6.42 | 0.1051 | Holding position - indicators still favorable (1/8 days) |
 | 10-05 15:51 | NO_ACTION | $774.85 | 43.69 | 9.20 | 3.59 | 0.1055 | BUY did not fill after 3 attempts |
 | 10-02 15:50 | NO_ACTION | $769.65 | 31.31 | 0.42 | -0.14 | 0.1035 | Insufficient momentum/velocity for entry |
 | 10-01 15:50 | NO_ACTION | $765.14 | 28.46 | -2.58 | -1.83 | 0.1074 | Insufficient momentum/velocity for entry |
 | 09-30 15:50 | NO_ACTION | $764.73 | 32.91 | 0.05 | -1.22 | 0.1076 | Insufficient momentum/velocity for entry |
-| 09-29 15:50 | NO_ACTION | $764.24 | 31.74 | -2.34 | -1.42 | 0.1105 | SELL incomplete - still holding 66 after 5 attempts |
 
 </details>
 
