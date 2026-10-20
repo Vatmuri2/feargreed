@@ -1,6 +1,6 @@
 # Fear & Greed Index Trading Bot
 
-> Dashboard auto-updated daily at market close | Last update: **2026-10-19 13:30 PST**
+> Dashboard auto-updated daily at market close | Last update: **2026-10-20 13:30 PST**
 
 ![Portfolio Performance](assets/portfolio_chart.png)
 
@@ -12,12 +12,12 @@
 |--------|-------|
 | Portfolio Value | **$24,867.22** |
 | Buying Power | $99,468.88 |
-| Current FGI | 25.76 |
+| Current FGI | 21.26 |
 | Position | FLAT |
 | Total P&L | **$+995** |
 | Win Rate | 50% (1W / 1L) |
 | Total Round Trips | 2 |
-| Last Signal | NO_ACTION @ 2026-10-19 09:35 |
+| Last Signal | NO_ACTION @ 2026-10-20 09:35 |
 
 <details>
 <summary>Trade History (2 trades)</summary>
@@ -34,11 +34,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 10-20 09:35 | NO_ACTION | $765.42 | 21.26 | -4.64 | -1.72 | 0.0891 | Insufficient momentum/velocity for entry |
 | 10-19 09:35 | NO_ACTION | $767.38 | 25.76 | -1.87 | -6.18 | 0.0898 | Insufficient momentum/velocity for entry |
 | 10-16 09:35 | NO_ACTION | $772.30 | 30.69 | -3.11 | -5.14 | 0.0963 | Insufficient momentum/velocity for entry |
 | 10-15 09:35 | NO_ACTION | $765.60 | 26.43 | -12.51 | -6.19 | 0.0978 | Insufficient momentum/velocity for entry |
 | 10-14 09:35 | NO_ACTION | $775.04 | 44.29 | -0.84 | 1.52 | 0.0957 | SELL incomplete - still holding 62 after 5 attempts |
-| 10-13 09:36 | NO_ACTION | $777.67 | 46.11 | 2.49 | 1.33 | 0.0964 | BUY did not fill after 3 attempts |
 
 </details>
 
@@ -50,12 +50,12 @@
 |--------|-------|
 | Portfolio Value | **$25,962.41** |
 | Buying Power | $103,849.64 |
-| Current FGI | 25.4 |
+| Current FGI | 26.29 |
 | Position | FLAT |
 | Total P&L | **$+302** |
 | Win Rate | 50% (2W / 2L) |
 | Total Round Trips | 4 |
-| Last Signal | NO_ACTION @ 2026-10-19 15:50 |
+| Last Signal | NO_ACTION @ 2026-10-20 15:50 |
 
 <details>
 <summary>Trade History (4 trades)</summary>
@@ -74,11 +74,11 @@
 
 | Time | Action | Price | FGI | Momentum | Velocity | Volatility | Reason |
 |------|--------|-------|-----|----------|----------|------------|--------|
+| 10-20 15:50 | NO_ACTION | $768.18 | 26.29 | 3.12 | -1.99 | 0.0897 | Insufficient momentum/velocity for entry |
 | 10-19 15:50 | NO_ACTION | $767.30 | 25.4 | 0.24 | -2.19 | 0.0905 | Insufficient momentum/velocity for entry |
 | 10-16 15:50 | NO_ACTION | $762.83 | 17.82 | -9.53 | -9.16 | 0.106 | Insufficient momentum/velocity for entry |
 | 10-15 15:50 | NO_ACTION | $771.67 | 32.26 | -4.25 | -4.35 | 0.0968 | Insufficient momentum/velocity for entry |
 | 10-14 15:50 | NO_ACTION | $768.97 | 31.96 | -8.90 | -4.57 | 0.1052 | Insufficient momentum/velocity for entry |
-| 10-13 15:50 | NO_ACTION | $778.38 | 45.31 | -0.12 | 2.51 | 0.0962 | SELL incomplete - still holding 66 after 5 attempts |
 
 </details>
 
